@@ -21,6 +21,7 @@ export default function NewGroup() {
           onSubmit={async (v) => {
             const { id } = await api<{ id: string }>("/api/groups", { body: v });
             router.push(`/groups/${id}?invite=1`);
+            router.refresh();
           }}
         />
       </div>

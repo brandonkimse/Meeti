@@ -53,7 +53,7 @@ export function summarize(perMember: MemberTravel[]): TravelSummary {
 }
 
 /**
- * The cost Where2 minimises. It blends the group's average trip with the
+ * The cost Meeti minimises. It blends the group's average trip with the
  * longest single trip (so nobody gets stuck with an outsized journey), and adds
  * a steep penalty when one person travels much farther than the typical member.
  */

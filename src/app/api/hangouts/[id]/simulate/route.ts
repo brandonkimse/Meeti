@@ -9,7 +9,7 @@ export const POST = handle<{ params: Promise<{ id: string }> }>(async (_req, { p
   if (!config.demoMode) throw new HttpError(404, "Not available.");
   const u = await requireUser();
   const id = (await params).id;
-  accessHangout(u.id, id);
+  await accessHangout(u.id, id);
   try {
     await simulateMe(u.id, id);
   } catch (e) {

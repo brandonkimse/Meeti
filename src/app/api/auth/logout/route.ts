@@ -1,7 +1,8 @@
-import { destroySession } from "@/server/auth";
 import { handle } from "@/server/http";
+import { supabaseServer } from "@/server/supabase";
 
 export const POST = handle(async () => {
-  await destroySession();
+  const supabase = await supabaseServer();
+  await supabase.auth.signOut();
   return { ok: true };
 });

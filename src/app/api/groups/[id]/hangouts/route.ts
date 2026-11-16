@@ -6,7 +6,7 @@ import { createHangout } from "@/server/services/hangouts";
 export const POST = handle<{ params: Promise<{ id: string }> }>(async (req, { params }) => {
   const u = await requireUser();
   const b = await readBody(req);
-  const id = createHangout(u.id, (await params).id, {
+  const id = await createHangout(u.id, (await params).id, {
     title: str(b.title, "Title", { min: 1, max: 60 }),
     startsAt: num(b.startsAt, "Start time", { min: Date.now() - 6 * 3600_000 }),
     durationMin: b.durationMin != null ? num(b.durationMin, "Duration", { min: 30, max: 24 * 60 }) : 180,

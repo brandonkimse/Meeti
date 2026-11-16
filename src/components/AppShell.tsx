@@ -4,9 +4,10 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { createContext, useContext, type ReactNode } from "react";
 import { Home, Plus, UserRound } from "lucide-react";
+import { OnlineProvider } from "./Online";
 import { Avatar, Logo } from "./ui";
 
-export type Me = { id: string; name: string; email: string; avatarUrl: string | null; demoMode: boolean };
+export type Me = { id: string; name: string; email: string; avatarUrl: string | null; demoMode: boolean; groupIds: string[] };
 const MeCtx = createContext<Me | null>(null);
 export const useMe = () => useContext(MeCtx)!;
 
@@ -15,6 +16,7 @@ export function AppShell({ me, children }: { me: Me; children: ReactNode }) {
   const immersive = path.startsWith("/hangouts/");
   return (
     <MeCtx.Provider value={me}>
+      <OnlineProvider meId={me.id} groupIds={me.groupIds}>
       <div className="min-h-dvh">
         {!immersive && (
           <header className="sticky top-0 z-40 border-b border-line/60 bg-paper/85 backdrop-blur-md">
@@ -62,6 +64,7 @@ export function AppShell({ me, children }: { me: Me; children: ReactNode }) {
           </nav>
         )}
       </div>
+      </OnlineProvider>
     </MeCtx.Provider>
   );
 }

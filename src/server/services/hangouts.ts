@@ -13,6 +13,7 @@ import type {
   TravelSummary,
 } from "@/lib/types";
 import { HttpError } from "../auth";
+import { background } from "../background";
 import { providerStatus } from "../config";
 import { newId, now, one, q, run, tx } from "../db";
 import { publish } from "../realtime";
@@ -61,7 +62,7 @@ type ParticipantRow = {
 type SuggestionRow = {
   id: string;
   added_by: string | null;
-  source: "member" | "where2";
+  source: "member" | "meeti";
   name: string;
   address: string | null;
   lat: number;
@@ -96,19 +97,19 @@ export type ShareRow = {
 const topic = (id: string) => `hangout:${id}`;
 const changed = (id: string, what = "hangout.updated") => publish(topic(id), { type: what, hangoutId: id });
 
-export function hangoutRow(id: string): HangoutRow {
-  const h = one<HangoutRow>("SELECT * FROM hangouts WHERE id = ?", id);
+export async function hangoutRow(id: string): Promise<HangoutRow> {
+  const h = await one<HangoutRow>("SELECT * FROM hangouts WHERE id = ?", id);
   if (!h) throw new HttpError(404, "Hangout not found.");
   return h;
 }
 
 /** Loads a hangout the user is allowed to see, applying lifecycle rules first. */
-export function accessHangout(userId: string, id: string) {
-  let h = hangoutRow(id);
-  const m = assertMember(userId, h.group_id);
+export async function accessHangout(userId: string, id: string) {
+  let h = await hangoutRow(id);
+  const m = await assertMember(userId, h.group_id);
   if (h.status === "live" && now() > h.ends_at) {
-    completeInternal(h.id);
-    h = hangoutRow(id);
+    await completeInternal(h.id);
+    h = await hangoutRow(id);
   }
   const canManage = h.created_by === userId || m.role === "owner";
   return { h, canManage };
@@ -137,16 +138,20 @@ function participantRows(hangoutId: string) {
   return q<ParticipantRow>(
     `SELECT p.user_id, p.rsvp, p.origin_lat, p.origin_lng, p.origin_label, p.origin_source, p.mode,
             u.name, u.avatar_url, u.is_demo
-       FROM participants p JOIN users u ON u.id = p.user_id
-      WHERE p.hangout_id = ? ORDER BY p.rowid`,
+       FROM participants p JOIN profiles u ON u.id = p.user_id
+      WHERE p.hangout_id = ? ORDER BY p.seq`,
     hangoutId,
   );
 }
 
-export function originsFor(h: HangoutRow): Origin[] {
-  return participantRows(h.id)
+function toOrigins(h: HangoutRow, parts: ParticipantRow[]): Origin[] {
+  return parts
     .filter((p) => p.rsvp !== "declined" && p.origin_lat != null && p.origin_lng != null)
     .map((p) => ({ id: p.user_id, lat: p.origin_lat!, lng: p.origin_lng!, mode: p.mode ?? h.mode }));
+}
+
+export async function originsFor(h: HangoutRow): Promise<Origin[]> {
+  return toOrigins(h, await participantRows(h.id));
 }
 
 export function originKey(origins: Origin[]): string {
@@ -157,13 +162,16 @@ export function originKey(origins: Origin[]): string {
   return createHash("sha1").update(s).digest("hex").slice(0, 16);
 }
 
-export function getHangout(userId: string, id: string): HangoutDetail {
-  const { h, canManage } = accessHangout(userId, id);
-  const g = one<{ id: string; name: string; emoji: string | null; image_url: string | null }>(
-    "SELECT id, name, emoji, image_url FROM groups WHERE id = ?",
-    h.group_id,
-  )!;
-  const parts = participantRows(h.id);
+export async function getHangout(userId: string, id: string): Promise<HangoutDetail> {
+  const { h, canManage } = await accessHangout(userId, id);
+  const [g, parts, votes, suggestionRows, shareRows] = await Promise.all([
+    one<{ id: string; name: string; emoji: string | null; image_url: string | null }>("SELECT id, name, emoji, image_url FROM groups WHERE id = ?", h.group_id),
+    participantRows(h.id),
+    q<{ user_id: string; suggestion_id: string }>("SELECT user_id, suggestion_id FROM votes WHERE hangout_id = ?", h.id),
+    q<SuggestionRow>("SELECT * FROM suggestions WHERE hangout_id = ? ORDER BY created_at", h.id),
+    q<ShareRow>("SELECT * FROM location_shares WHERE hangout_id = ?", h.id),
+  ]);
+
   const participants: Participant[] = parts.map((p) => ({
     user: toPublicUser({ id: p.user_id, name: p.name, avatar_url: p.avatar_url, is_demo: p.is_demo }),
     rsvp: p.rsvp,
@@ -174,32 +182,27 @@ export function getHangout(userId: string, id: string): HangoutDetail {
         : null,
   }));
 
-  const key = originKey(originsFor(h));
-  const votes = q<{ user_id: string; suggestion_id: string }>("SELECT user_id, suggestion_id FROM votes WHERE hangout_id = ?", h.id);
-  const suggestions: Suggestion[] = q<SuggestionRow>("SELECT * FROM suggestions WHERE hangout_id = ? ORDER BY created_at", h.id).map(
-    (s) => ({
-      id: s.id,
-      name: s.name,
-      address: s.address,
-      lat: s.lat,
-      lng: s.lng,
-      category: s.category,
-      imageUrl: s.image_url,
-      rating: s.rating,
-      ratingCount: s.rating_count,
-      source: s.source,
-      addedBy: s.added_by,
-      travel: s.travel_json ? (JSON.parse(s.travel_json) as TravelSummary) : null,
-      travelStale: s.travel_key !== key,
-      votes: votes.filter((v) => v.suggestion_id === s.id).map((v) => v.user_id),
-    }),
-  );
+  const key = originKey(toOrigins(h, parts));
+  const suggestions: Suggestion[] = suggestionRows.map((s) => ({
+    id: s.id,
+    name: s.name,
+    address: s.address,
+    lat: s.lat,
+    lng: s.lng,
+    category: s.category,
+    imageUrl: s.image_url,
+    rating: s.rating,
+    ratingCount: s.rating_count,
+    source: s.source,
+    addedBy: s.added_by,
+    travel: s.travel_json ? (JSON.parse(s.travel_json) as TravelSummary) : null,
+    travelStale: s.travel_key !== key,
+    votes: votes.filter((v) => v.suggestion_id === s.id).map((v) => v.user_id),
+  }));
 
   const recs = h.recommendations_json ? (JSON.parse(h.recommendations_json) as RecommendationSet) : null;
   const memberIds = new Set(parts.map((p) => p.user_id));
-  const shares = q<ShareRow>("SELECT * FROM location_shares WHERE hangout_id = ?", h.id)
-    .filter((s) => memberIds.has(s.user_id))
-    .map(toShare);
+  const shares = shareRows.filter((s) => memberIds.has(s.user_id)).map(toShare);
 
   return {
     id: h.id,
@@ -214,7 +217,7 @@ export function getHangout(userId: string, id: string): HangoutDetail {
     pollClosesAt: h.poll_closes_at,
     finalizedAt: h.finalized_at,
     completedAt: h.completed_at,
-    group: { id: g.id, name: g.name, emoji: g.emoji, imageUrl: g.image_url },
+    group: { id: g!.id, name: g!.name, emoji: g!.emoji, imageUrl: g!.image_url },
     destination:
       h.dest_lat != null && h.dest_lng != null
         ? {
@@ -236,16 +239,16 @@ export function getHangout(userId: string, id: string): HangoutDetail {
   };
 }
 
-export function createHangout(
+export async function createHangout(
   userId: string,
   groupId: string,
   input: { title: string; startsAt: number; durationMin: number; mode: Mode; category: Category | null; pollClosesAt: number | null },
 ) {
-  assertMember(userId, groupId);
+  await assertMember(userId, groupId);
   const id = newId();
   const t = now();
-  tx(() => {
-    run(
+  await tx(async () => {
+    await run(
       `INSERT INTO hangouts (id, group_id, created_by, title, starts_at, ends_at, mode, category, status, poll_closes_at, created_at)
        VALUES (?,?,?,?,?,?,?,?, 'planning', ?, ?)`,
       id,
@@ -259,11 +262,12 @@ export function createHangout(
       input.pollClosesAt,
       t,
     );
-    const members = q<{ user_id: string }>("SELECT user_id FROM memberships WHERE group_id = ?", groupId);
-    for (const m of members)
-      run("INSERT INTO participants (hangout_id, user_id, rsvp, updated_at) VALUES (?,?, 'going', ?)", id, m.user_id, t);
+    // Creator first, so they're listed first.
+    await run("INSERT INTO participants (hangout_id, user_id, rsvp, updated_at) VALUES (?,?, 'going', ?)", id, userId, t);
+    const members = await q<{ user_id: string }>("SELECT user_id FROM memberships WHERE group_id = ? AND user_id != ? ORDER BY joined_at", groupId, userId);
+    for (const m of members) await run("INSERT INTO participants (hangout_id, user_id, rsvp, updated_at) VALUES (?,?, 'going', ?)", id, m.user_id, t);
   });
-  publish(`group:${groupId}`, { type: "group.hangouts", groupId });
+  await publish(`group:${groupId}`, { type: "group.hangouts", groupId });
   return id;
 }
 
@@ -271,15 +275,15 @@ function requirePlanning(h: HangoutRow) {
   if (h.status !== "planning") throw new HttpError(409, "Planning for this hangout is closed.");
 }
 
-export function setOrigin(
+export async function setOrigin(
   userId: string,
   id: string,
   input: { lat: number; lng: number; label: string | null; source: "gps" | "manual"; mode: Mode | null } | null,
 ) {
-  const { h } = accessHangout(userId, id);
+  const { h } = await accessHangout(userId, id);
   requirePlanning(h);
   if (input)
-    run(
+    await run(
       `UPDATE participants SET origin_lat = ?, origin_lng = ?, origin_label = ?, origin_source = ?, mode = COALESCE(?, mode), updated_at = ?
         WHERE hangout_id = ? AND user_id = ?`,
       input.lat,
@@ -292,30 +296,30 @@ export function setOrigin(
       userId,
     );
   else
-    run(
+    await run(
       `UPDATE participants SET origin_lat = NULL, origin_lng = NULL, origin_label = NULL, origin_source = NULL, updated_at = ?
         WHERE hangout_id = ? AND user_id = ?`,
       now(),
       id,
       userId,
     );
-  changed(id);
-  void refreshTravel(id);
+  await changed(id);
+  background(() => refreshTravel(id));
 }
 
-export function setParticipation(userId: string, id: string, input: { rsvp?: Participant["rsvp"]; mode?: Mode }) {
-  const { h } = accessHangout(userId, id);
-  if (input.rsvp) run("UPDATE participants SET rsvp = ?, updated_at = ? WHERE hangout_id = ? AND user_id = ?", input.rsvp, now(), id, userId);
+export async function setParticipation(userId: string, id: string, input: { rsvp?: Participant["rsvp"]; mode?: Mode }) {
+  const { h } = await accessHangout(userId, id);
+  if (input.rsvp) await run("UPDATE participants SET rsvp = ?, updated_at = ? WHERE hangout_id = ? AND user_id = ?", input.rsvp, now(), id, userId);
   if (input.mode) {
     requirePlanning(h);
-    run("UPDATE participants SET mode = ?, updated_at = ? WHERE hangout_id = ? AND user_id = ?", input.mode, now(), id, userId);
+    await run("UPDATE participants SET mode = ?, updated_at = ? WHERE hangout_id = ? AND user_id = ?", input.mode, now(), id, userId);
   }
-  changed(id);
-  if (h.status === "planning") void refreshTravel(id);
+  await changed(id);
+  if (h.status === "planning") background(() => refreshTravel(id));
 }
 
 async function travelFor(h: HangoutRow, places: { lat: number; lng: number }[]): Promise<TravelSummary[]> {
-  const origins = originsFor(h);
+  const origins = await originsFor(h);
   const legs = await travelMatrix(origins, places, h.starts_at);
   return places.map((_, j) =>
     summarize(
@@ -327,39 +331,31 @@ async function travelFor(h: HangoutRow, places: { lat: number; lng: number }[]):
   );
 }
 
-/** Hangouts with a refresh in flight -> whether another run was requested meanwhile. */
-const refreshing = new Map<string, boolean>();
-
-/** Recompute per-member travel times for every suggestion whose inputs changed. */
+/** Recompute per-member travel times for every suggestion whose inputs changed. Idempotent. */
 export async function refreshTravel(id: string) {
-  if (refreshing.has(id)) {
-    refreshing.set(id, true);
-    return;
-  }
-  refreshing.set(id, false);
-  try {
-    // Small debounce so a burst of origin edits triggers one recompute.
-    await new Promise((r) => setTimeout(r, 300));
-    const h = hangoutRow(id);
-    const key = originKey(originsFor(h));
-    const stale = q<SuggestionRow>("SELECT * FROM suggestions WHERE hangout_id = ? AND (travel_key IS NULL OR travel_key != ?)", id, key);
-    if (!stale.length) return;
-    const travel = await travelFor(h, stale);
-    stale.forEach((s, i) => run("UPDATE suggestions SET travel_json = ?, travel_key = ? WHERE id = ?", JSON.stringify(travel[i]), key, s.id));
-    changed(id);
-  } catch (e) {
-    console.warn("[where2] travel refresh failed:", (e as Error).message);
-  } finally {
-    const again = refreshing.get(id);
-    refreshing.delete(id);
-    if (again) void refreshTravel(id);
-  }
+  const h = await one<HangoutRow>("SELECT * FROM hangouts WHERE id = ?", id);
+  if (!h) return;
+  const key = originKey(await originsFor(h));
+  const stale = await q<SuggestionRow>("SELECT * FROM suggestions WHERE hangout_id = ? AND (travel_key IS NULL OR travel_key != ?)", id, key);
+  if (!stale.length) return;
+  const travel = await travelFor(h, stale);
+  // Only write if the inputs haven't changed again meanwhile.
+  if (originKey(await originsFor(h)) !== key) return;
+  for (let i = 0; i < stale.length; i++)
+    await run("UPDATE suggestions SET travel_json = ?, travel_key = ? WHERE id = ?", JSON.stringify(travel[i]), key, stale[i].id);
+  await changed(id);
 }
 
-export async function addSuggestion(userId: string, id: string, place: PlaceCandidate, source: "member" | "where2", opts: { deferTravel?: boolean } = {}) {
-  const { h } = accessHangout(userId, id);
+export async function addSuggestion(
+  userId: string,
+  id: string,
+  place: PlaceCandidate,
+  source: "member" | "meeti",
+  opts: { deferTravel?: boolean } = {},
+) {
+  const { h } = await accessHangout(userId, id);
   requirePlanning(h);
-  const existing = one<{ id: string }>(
+  const existing = await one<{ id: string }>(
     "SELECT id FROM suggestions WHERE hangout_id = ? AND (external_id = ? OR (abs(lat - ?) < 0.0003 AND abs(lng - ?) < 0.0003 AND name = ?))",
     id,
     place.externalId,
@@ -368,19 +364,19 @@ export async function addSuggestion(userId: string, id: string, place: PlaceCand
     place.name,
   );
   if (existing) return existing.id;
-  const count = one<{ n: number }>("SELECT COUNT(*) AS n FROM suggestions WHERE hangout_id = ?", id)!.n;
+  const count = (await one<{ n: number }>("SELECT COUNT(*) AS n FROM suggestions WHERE hangout_id = ?", id))!.n;
   if (count >= 12) throw new HttpError(400, "That's plenty of options! Remove one before adding another.");
 
   const sid = newId();
-  const key = originKey(originsFor(h));
+  const key = originKey(await originsFor(h));
   let travel: TravelSummary | null = null;
   if (!opts.deferTravel)
     try {
       [travel] = await travelFor(h, [place]);
     } catch (e) {
-      console.warn("[where2] travel for new suggestion failed:", (e as Error).message);
+      console.warn("[meeti] travel for new suggestion failed:", (e as Error).message);
     }
-  run(
+  await run(
     `INSERT INTO suggestions (id, hangout_id, added_by, source, name, address, lat, lng, category, image_url, rating, rating_count, external_id, travel_json, travel_key, created_at)
      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     sid,
@@ -400,46 +396,46 @@ export async function addSuggestion(userId: string, id: string, place: PlaceCand
     travel ? key : null,
     now(),
   );
-  changed(id);
-  if (!travel) void refreshTravel(id);
+  await changed(id);
+  if (!travel) background(() => refreshTravel(id));
   return sid;
 }
 
-export function removeSuggestion(userId: string, id: string, suggestionId: string) {
-  const { h, canManage } = accessHangout(userId, id);
+export async function removeSuggestion(userId: string, id: string, suggestionId: string) {
+  const { h, canManage } = await accessHangout(userId, id);
   requirePlanning(h);
-  const s = one<{ added_by: string | null }>("SELECT added_by FROM suggestions WHERE id = ? AND hangout_id = ?", suggestionId, id);
+  const s = await one<{ added_by: string | null }>("SELECT added_by FROM suggestions WHERE id = ? AND hangout_id = ?", suggestionId, id);
   if (!s) throw new HttpError(404, "Suggestion not found.");
   if (s.added_by !== userId && !canManage) throw new HttpError(403, "Only the person who added this (or the host) can remove it.");
-  run("DELETE FROM suggestions WHERE id = ?", suggestionId);
-  changed(id);
+  await run("DELETE FROM suggestions WHERE id = ?", suggestionId);
+  await changed(id);
 }
 
-export function vote(userId: string, id: string, suggestionId: string | null) {
-  const { h } = accessHangout(userId, id);
+export async function vote(userId: string, id: string, suggestionId: string | null) {
+  const { h } = await accessHangout(userId, id);
   requirePlanning(h);
   if (h.poll_closes_at && now() > h.poll_closes_at) throw new HttpError(409, "Voting has closed.");
   if (suggestionId) {
-    if (!one("SELECT 1 FROM suggestions WHERE id = ? AND hangout_id = ?", suggestionId, id)) throw new HttpError(404, "Option not found.");
-    run(
+    if (!(await one("SELECT 1 FROM suggestions WHERE id = ? AND hangout_id = ?", suggestionId, id))) throw new HttpError(404, "Option not found.");
+    await run(
       `INSERT INTO votes (hangout_id, user_id, suggestion_id, updated_at) VALUES (?,?,?,?)
-       ON CONFLICT(hangout_id, user_id) DO UPDATE SET suggestion_id = excluded.suggestion_id, updated_at = excluded.updated_at`,
+       ON CONFLICT (hangout_id, user_id) DO UPDATE SET suggestion_id = excluded.suggestion_id, updated_at = excluded.updated_at`,
       id,
       userId,
       suggestionId,
       now(),
     );
   } else {
-    run("DELETE FROM votes WHERE hangout_id = ? AND user_id = ?", id, userId);
+    await run("DELETE FROM votes WHERE hangout_id = ? AND user_id = ?", id, userId);
   }
-  publish(topic(id), { type: "hangout.votes", hangoutId: id });
+  await publish(topic(id), { type: "hangout.votes", hangoutId: id });
 }
 
 export async function generateRecommendations(userId: string, id: string, category: Category): Promise<RecommendationSet> {
-  const { h } = accessHangout(userId, id);
+  const { h } = await accessHangout(userId, id);
   requirePlanning(h);
-  const origins = originsFor(h);
-  if (!origins.length) throw new HttpError(400, "Add at least one starting point first. Where2 needs to know where people are coming from.");
+  const origins = await originsFor(h);
+  if (!origins.length) throw new HttpError(400, "Add at least one starting point first. Meeti needs to know where people are coming from.");
   let result;
   try {
     result = await recommend(origins, category, h.starts_at);
@@ -447,21 +443,21 @@ export async function generateRecommendations(userId: string, id: string, catego
     throw new HttpError(502, (e as Error).message);
   }
   const set: RecommendationSet = { ...result, category, key: originKey(origins), generatedAt: now() };
-  run("UPDATE hangouts SET recommendations_json = ?, recommendations_key = ?, category = ? WHERE id = ?", JSON.stringify(set), set.key, category, id);
-  changed(id);
+  await run("UPDATE hangouts SET recommendations_json = ?, recommendations_key = ?, category = ? WHERE id = ?", JSON.stringify(set), set.key, category, id);
+  await changed(id);
   return set;
 }
 
-export function finalize(userId: string, id: string, suggestionId: string) {
-  const { h, canManage } = accessHangout(userId, id);
+export async function finalize(userId: string, id: string, suggestionId: string) {
+  const { h, canManage } = await accessHangout(userId, id);
   requirePlanning(h);
   if (!canManage) throw new HttpError(403, "Only the host can lock in the destination.");
-  const s = one<SuggestionRow>("SELECT * FROM suggestions WHERE id = ? AND hangout_id = ?", suggestionId, id);
+  const s = await one<SuggestionRow>("SELECT * FROM suggestions WHERE id = ? AND hangout_id = ?", suggestionId, id);
   if (!s) throw new HttpError(404, "Option not found.");
   const t = now();
-  run(
+  await run(
     `UPDATE hangouts SET status = 'live', final_suggestion_id = ?, dest_name = ?, dest_address = ?, dest_lat = ?, dest_lng = ?, dest_image_url = ?,
-       finalized_at = ?, poll_closes_at = COALESCE(poll_closes_at, ?), ends_at = MAX(ends_at, ?) WHERE id = ?`,
+       finalized_at = ?, poll_closes_at = COALESCE(poll_closes_at, ?), ends_at = GREATEST(ends_at, ?) WHERE id = ?`,
     s.id,
     s.name,
     s.address,
@@ -473,46 +469,47 @@ export function finalize(userId: string, id: string, suggestionId: string) {
     t + 2 * 3600_000,
     id,
   );
-  changed(id, "hangout.finalized");
-  publish(`group:${h.group_id}`, { type: "group.hangouts", groupId: h.group_id });
+  await changed(id, "hangout.finalized");
+  await publish(`group:${h.group_id}`, { type: "group.hangouts", groupId: h.group_id });
 }
 
-function completeInternal(id: string) {
-  const h = hangoutRow(id);
-  tx(() => {
-    run("UPDATE hangouts SET status = 'completed', completed_at = ? WHERE id = ? AND status IN ('live','planning')", now(), id);
+async function completeInternal(id: string) {
+  const h = await hangoutRow(id);
+  await tx(async () => {
+    await run("UPDATE hangouts SET status = 'completed', completed_at = ? WHERE id = ? AND status IN ('live','planning')", now(), id);
     // Location sharing ends with the hangout: wipe coordinates, keep arrival facts for the recap.
-    run(
+    await run(
       "UPDATE location_shares SET status = 'expired', lat = NULL, lng = NULL, accuracy = NULL, eta_s = NULL, distance_m = NULL WHERE hangout_id = ?",
       id,
     );
+    await run("DELETE FROM demo_journeys WHERE hangout_id = ?", id);
   });
-  changed(id, "hangout.completed");
-  publish(`group:${h.group_id}`, { type: "group.hangouts", groupId: h.group_id });
+  await changed(id, "hangout.completed");
+  await publish(`group:${h.group_id}`, { type: "group.hangouts", groupId: h.group_id });
 }
 
-export function complete(userId: string, id: string) {
-  const { h } = accessHangout(userId, id);
+export async function complete(userId: string, id: string) {
+  const { h } = await accessHangout(userId, id);
   if (h.status !== "live") throw new HttpError(409, "Only a live hangout can be wrapped up.");
-  completeInternal(id);
+  await completeInternal(id);
 }
 
-export function cancelHangout(userId: string, id: string) {
-  const { h, canManage } = accessHangout(userId, id);
+export async function cancelHangout(userId: string, id: string) {
+  const { h, canManage } = await accessHangout(userId, id);
   if (!canManage) throw new HttpError(403, "Only the host can cancel this hangout.");
-  run("DELETE FROM hangouts WHERE id = ?", id);
-  changed(id, "hangout.deleted");
-  publish(`group:${h.group_id}`, { type: "group.hangouts", groupId: h.group_id });
+  await run("DELETE FROM hangouts WHERE id = ?", id);
+  await changed(id, "hangout.deleted");
+  await publish(`group:${h.group_id}`, { type: "group.hangouts", groupId: h.group_id });
 }
 
-export function updateHangout(userId: string, id: string, patch: { title?: string; startsAt?: number; mode?: Mode }) {
-  const { h, canManage } = accessHangout(userId, id);
+export async function updateHangout(userId: string, id: string, patch: { title?: string; startsAt?: number; mode?: Mode }) {
+  const { h, canManage } = await accessHangout(userId, id);
   if (!canManage) throw new HttpError(403, "Only the host can edit the plan.");
   requirePlanning(h);
-  if (patch.title) run("UPDATE hangouts SET title = ? WHERE id = ?", patch.title, id);
-  if (patch.startsAt) run("UPDATE hangouts SET starts_at = ?, ends_at = ? + (ends_at - starts_at) WHERE id = ?", patch.startsAt, patch.startsAt, id);
-  if (patch.mode) run("UPDATE hangouts SET mode = ? WHERE id = ?", patch.mode, id);
-  changed(id);
-  publish(`group:${h.group_id}`, { type: "group.hangouts", groupId: h.group_id });
-  if (patch.mode) void refreshTravel(id);
+  if (patch.title) await run("UPDATE hangouts SET title = ? WHERE id = ?", patch.title, id);
+  if (patch.startsAt) await run("UPDATE hangouts SET ends_at = ? + (ends_at - starts_at), starts_at = ? WHERE id = ?", patch.startsAt, patch.startsAt, id);
+  if (patch.mode) await run("UPDATE hangouts SET mode = ? WHERE id = ?", patch.mode, id);
+  await changed(id);
+  await publish(`group:${h.group_id}`, { type: "group.hangouts", groupId: h.group_id });
+  if (patch.mode) background(() => refreshTravel(id));
 }

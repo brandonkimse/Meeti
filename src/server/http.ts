@@ -10,7 +10,7 @@ export function handle<C>(fn: (req: Request, ctx: C) => Promise<unknown>) {
       return Response.json(out ?? { ok: true });
     } catch (e) {
       if (e instanceof HttpError) return Response.json({ error: e.message }, { status: e.status });
-      console.error("[where2]", e);
+      console.error("[meeti]", e);
       return Response.json({ error: "Something went wrong. Please try again." }, { status: 500 });
     }
   };

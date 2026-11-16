@@ -5,7 +5,7 @@ import { travelMatrix, type Leg, type Origin } from "./routing";
 import { centroid, fairnessCost, haversine, summarize } from "./util";
 
 /**
- * Where2's fair meeting-spot recommender.
+ * Meeti's fair meeting-spot recommender.
  *
  * 1. Lay a grid of candidate meeting areas over the region spanned by everyone's
  *    starting points (plus margin, plus the centroid).

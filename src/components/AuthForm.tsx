@@ -16,13 +16,22 @@ export function AuthForm({ mode, demoMode }: { mode: "login" | "signup"; demoMod
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<"form" | "demo" | null>(null);
+  const [sentTo, setSentTo] = useState<string | null>(null);
+  const linkError = params.get("error") === "link";
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
     setBusy("form");
     try {
-      await api(`/api/auth/${mode}`, { body: mode === "signup" ? { name, email, password } : { email, password } });
+      const r = await api<{ needsConfirmation?: boolean }>(`/api/auth/${mode}`, {
+        body: mode === "signup" ? { name, email, password, next: safeNext } : { email, password },
+      });
+      if (r.needsConfirmation) {
+        setSentTo(email);
+        setBusy(null);
+        return;
+      }
       router.replace(safeNext);
       router.refresh();
     } catch (err) {
@@ -65,6 +74,19 @@ export function AuthForm({ mode, demoMode }: { mode: "login" | "signup"; demoMod
         </h1>
         <p className="mt-3 text-muted">{mode === "signup" ? "Create your account. It takes about ten seconds." : "Log in to see what your crew is up to."}</p>
 
+        {linkError && (
+          <p className="mt-6 rounded-xl bg-danger/10 px-3 py-2 text-sm font-semibold text-danger">That link has expired or was already used. Log in, or sign up again.</p>
+        )}
+
+        {sentTo ? (
+          <div className="card mt-8 animate-rise p-6 text-center">
+            <div className="text-4xl">📬</div>
+            <h2 className="font-display mt-2 text-xl font-bold">Check your email</h2>
+            <p className="mt-1 text-sm text-muted">
+              We sent a confirmation link to <span className="font-semibold text-ink">{sentTo}</span>. Click it to finish signing up.
+            </p>
+          </div>
+        ) : (
         <form onSubmit={submit} className="mt-8 space-y-4">
           {mode === "signup" && (
             <div>
@@ -101,6 +123,7 @@ export function AuthForm({ mode, demoMode }: { mode: "login" | "signup"; demoMod
             {busy === "form" ? <Spinner /> : mode === "signup" ? "Create account" : "Log in"}
           </button>
         </form>
+        )}
 
         {demoMode && (
           <button onClick={demo} className="btn btn-volt btn-lg mt-3 w-full" disabled={!!busy}>
@@ -109,7 +132,7 @@ export function AuthForm({ mode, demoMode }: { mode: "login" | "signup"; demoMod
         )}
 
         <p className="mt-6 text-center text-sm text-muted">
-          {mode === "signup" ? "Already have an account? " : "New to Where2? "}
+          {mode === "signup" ? "Already have an account? " : "New to Meeti? "}
           <Link href={otherHref} className="font-bold text-ink underline decoration-volt decoration-[3px] underline-offset-4">
             {mode === "signup" ? "Log in" : "Create one"}
           </Link>

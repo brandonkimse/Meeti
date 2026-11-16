@@ -66,6 +66,7 @@ export default function Join() {
                     setBusy(true);
                     const r = await api<{ groupId: string }>(`/api/invites/${encodeURIComponent(code)}`, { body: {} });
                     router.push(`/groups/${r.groupId}`);
+                    router.refresh();
                   }}
                 >
                   {busy ? <Spinner /> : `Join ${data.name}`}

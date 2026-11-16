@@ -3,6 +3,7 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
 import { X } from "lucide-react";
 import { gradient, initials } from "@/lib/client/colors";
+import { useIsOnline } from "./Online";
 import type { PublicUser } from "@/lib/types";
 
 /* ---------- Brand ---------- */
@@ -11,12 +12,14 @@ export function Logo({ className = "", dark = false }: { className?: string; dar
   return (
     <span className={`font-display inline-flex items-center gap-1.5 text-xl font-extrabold ${className}`}>
       <span className="relative grid h-7 w-7 place-items-center rounded-[10px] bg-volt text-ink shadow-[inset_0_-2px_0_rgba(0,0,0,0.1)]">
-        <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2.6} strokeLinecap="round">
-          <path d="M5 6l4 12 3-7 3 7 4-12" />
+        {/* Two paths meeting at one point. */}
+        <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2.6} strokeLinecap="round" aria-hidden>
+          <path d="M4 18 C 7 12, 9 12, 12 12 C 15 12, 17 12, 20 18" />
+          <circle cx="12" cy="7" r="2.6" fill="currentColor" stroke="none" />
         </svg>
       </span>
       <span className={dark ? "text-white" : "text-ink"}>
-        Where<span className="text-volt-ink">2</span>
+        Meet<span className="text-volt-ink">i</span>
       </span>
     </span>
   );
@@ -27,6 +30,8 @@ export function Logo({ className = "", dark = false }: { className?: string; dar
 type AvatarUser = Pick<PublicUser, "id" | "name" | "avatarUrl"> & { online?: boolean };
 
 export function Avatar({ user, size = 40, ring = false, showOnline = false }: { user: AvatarUser; size?: number; ring?: boolean; showOnline?: boolean }) {
+  const isOnline = useIsOnline();
+  const online = isOnline(user);
   return (
     <span className="relative inline-block shrink-0" style={{ width: size, height: size }} title={user.name}>
       <span
@@ -42,9 +47,9 @@ export function Avatar({ user, size = 40, ring = false, showOnline = false }: { 
       </span>
       {showOnline && (
         <span
-          className={`absolute bottom-0 right-0 rounded-full ring-2 ring-white ${user.online ? "bg-mint" : "bg-faint"}`}
+          className={`absolute bottom-0 right-0 rounded-full ring-2 ring-white ${online ? "bg-mint" : "bg-faint"}`}
           style={{ width: Math.max(9, size * 0.26), height: Math.max(9, size * 0.26) }}
-          aria-label={user.online ? "Online" : "Offline"}
+          aria-label={online ? "Online" : "Offline"}
         />
       )}
     </span>

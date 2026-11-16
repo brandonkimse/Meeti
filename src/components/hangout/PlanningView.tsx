@@ -363,7 +363,7 @@ function PlacesTab({
     }
   }
 
-  async function add(p: PlaceCandidate, source: "member" | "where2") {
+  async function add(p: PlaceCandidate, source: "member" | "meeti") {
     setAdding(p.externalId);
     try {
       await api(`/api/hangouts/${h.id}/suggestions`, { body: { ...p, source } });
@@ -412,7 +412,7 @@ function PlacesTab({
             <p className="mx-auto mt-1 max-w-xs text-sm text-muted">
               {origins === 0
                 ? "Add at least one starting point first."
-                : `Where2 checks real travel times from all ${origins} starting ${origins === 1 ? "point" : "points"}, then suggests places that nobody has to trek to.`}
+                : `Meeti checks real travel times from all ${origins} starting ${origins === 1 ? "point" : "points"}, then suggests places that nobody has to trek to.`}
             </p>
             <button className="btn btn-volt mt-4" onClick={() => find()} disabled={loading || origins === 0}>
               {loading ? (
@@ -443,7 +443,7 @@ function PlacesTab({
                 onFocus={() => setActive(active === r.externalId ? null : r.externalId)}
                 added={h.suggestions.some((s) => sameplace(s, r))}
                 adding={adding === r.externalId}
-                onAdd={() => add(r, "where2")}
+                onAdd={() => add(r, "meeti")}
               />
             ))}
             <button className="btn btn-ghost btn-sm w-full text-muted" onClick={() => find()} disabled={loading}>
@@ -455,7 +455,7 @@ function PlacesTab({
 
       <section>
         <h3 className="font-display mb-1 font-bold">Have somewhere in mind?</h3>
-        <p className="mb-3 text-sm text-muted">Search for any place and add it to the vote. Where2 works out everyone&apos;s travel time for it.</p>
+        <p className="mb-3 text-sm text-muted">Search for any place and add it to the vote. Meeti works out everyone&apos;s travel time for it.</p>
         <LocationSearch near={center} placeholder="Search restaurants, parks, addresses…" actionLabel="+ Add" onPick={(p) => add({ ...p, category: p.category ?? null }, "member")} />
       </section>
 
@@ -700,8 +700,8 @@ function SuggestionCard({
       <div className="space-y-3 p-3.5">
         <div className="flex items-center gap-2 text-xs text-muted">
           <span className="min-w-0 flex-1 truncate">{s.address ?? "Address unavailable"}</span>
-          {s.source === "where2" ? (
-            <span className="shrink-0 font-semibold">✨ Where2 pick</span>
+          {s.source === "meeti" ? (
+            <span className="shrink-0 font-semibold">✨ Meeti pick</span>
           ) : adder ? (
             <span className="flex shrink-0 items-center gap-1 font-semibold">
               <Avatar user={adder.user} size={16} /> {adder.user.id === h.me.id ? "You" : firstName(adder.user.name)}

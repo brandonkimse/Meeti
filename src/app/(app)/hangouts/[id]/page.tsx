@@ -56,9 +56,9 @@ export default function HangoutPage() {
         router.replace("/home");
         return;
       }
-      if ((e as { hangoutId?: string }).hangoutId === id || e.type === "resync" || e.type === "presence") mutate();
+      if ((e as { hangoutId?: string }).hangoutId === id || e.type === "resync") mutate();
     },
-    { hangout: id },
+    [`hangout:${id}`],
   );
 
   if (error)

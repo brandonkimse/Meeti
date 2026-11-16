@@ -6,6 +6,7 @@ import { useState } from "react";
 import useSWR from "swr";
 import { ArrowLeft, Check, Copy, Crown, LogOut, MoreHorizontal, Pencil, RefreshCw, Share2, UserMinus, UserPlus } from "lucide-react";
 import { useMe } from "@/components/AppShell";
+import { useIsOnline } from "@/components/Online";
 import { GroupForm } from "@/components/GroupForm";
 import { HangoutCard } from "@/components/HangoutCard";
 import { Avatar, ErrorState, GroupTile, PageLoader, Sheet, useToast } from "@/components/ui";
@@ -36,8 +37,9 @@ export default function GroupPage() {
       router.replace("/home");
       return;
     }
-    if ((e as { groupId?: string }).groupId === id || e.type === "presence" || e.type === "resync") mutate();
-  });
+    if ((e as { groupId?: string }).groupId === id || e.type === "resync") mutate();
+  }, [`group:${id}`, `user:${me.id}`]);
+  const isOnline = useIsOnline();
 
   if (error) return <ErrorState message="This group doesn't exist or you're not in it." action={<Link href="/home" className="btn btn-ink">Go home</Link>} />;
   if (!g) return <PageLoader />;
@@ -47,7 +49,7 @@ export default function GroupPage() {
   const link = `${origin}/join/${g.inviteCode}`;
   const upcoming = g.hangouts.filter((h) => h.status === "planning" || h.status === "live");
   const history = g.hangouts.filter((h) => h.status === "completed");
-  const online = members.filter((m) => m.online).length;
+  const online = members.filter(isOnline).length;
 
   async function copy() {
     await navigator.clipboard.writeText(link);
@@ -96,7 +98,7 @@ export default function GroupPage() {
               <div className="card p-6 text-center">
                 <div className="text-3xl">🗓️</div>
                 <p className="mt-2 font-semibold">Nothing planned yet</p>
-                <p className="text-sm text-muted">Start a hangout, and Where2 will find a spot that&apos;s fair for everyone.</p>
+                <p className="text-sm text-muted">Start a hangout, and Meeti will find a spot that&apos;s fair for everyone.</p>
               </div>
             )}
           </section>
@@ -122,7 +124,7 @@ export default function GroupPage() {
                     {m.id === me.id && <span className="text-xs font-semibold text-muted">(you)</span>}
                     {m.role === "owner" && <Crown className="h-3.5 w-3.5 text-amber" aria-label="Owner" />}
                   </div>
-                  <div className="text-xs text-muted">{m.online ? "Online now" : `Joined ${ago(m.joinedAt)}`}</div>
+                  <div className="text-xs text-muted">{isOnline(m) ? "Online now" : `Joined ${ago(m.joinedAt)}`}</div>
                 </div>
                 {isOwner && m.id !== me.id && (
                   <button className="btn btn-ghost p-2" onClick={() => setManage(m)} aria-label={`Manage ${m.name}`}>
@@ -153,7 +155,7 @@ export default function GroupPage() {
             className="btn btn-volt"
             onClick={() =>
               navigator.share
-                ? navigator.share({ title: `Join ${g.name} on Where2`, text: `Join ${g.name} on Where2 so we can plan hangouts together`, url: link }).catch(() => {})
+                ? navigator.share({ title: `Join ${g.name} on Meeti`, text: `Join ${g.name} on Meeti so we can plan hangouts together`, url: link }).catch(() => {})
                 : copy()
             }
           >
@@ -215,6 +217,7 @@ export default function GroupPage() {
             onClick={async () => {
               await api(`/api/groups/${g.id}/leave`, { body: {} });
               router.replace("/home");
+              router.refresh();
             }}
           >
             Leave

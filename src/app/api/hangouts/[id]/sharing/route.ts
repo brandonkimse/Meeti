@@ -8,7 +8,7 @@ export const POST = handle<{ params: Promise<{ id: string }> }>(async (req, { pa
   const id = (await params).id;
   const b = await readBody(req);
   const action = oneOf(b.action, "Action", ["start", "pause", "resume", "stop"] as const);
-  if (action === "start") startSharing(u.id, id);
-  else setSharingStatus(u.id, id, action === "pause" ? "paused" : action === "resume" ? "active" : "stopped");
+  if (action === "start") await startSharing(u.id, id);
+  else await setSharingStatus(u.id, id, action === "pause" ? "paused" : action === "resume" ? "active" : "stopped");
   return { ok: true };
 });

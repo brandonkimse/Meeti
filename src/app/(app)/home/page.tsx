@@ -6,6 +6,7 @@ import { useState } from "react";
 import useSWR from "swr";
 import { ArrowRight, Plus, Users } from "lucide-react";
 import { useMe } from "@/components/AppShell";
+import { useIsOnline } from "@/components/Online";
 import { HangoutCard } from "@/components/HangoutCard";
 import { AvatarStack, GroupTile, PageLoader, ErrorState } from "@/components/ui";
 import { fetcher } from "@/lib/client/api";
@@ -25,9 +26,13 @@ export default function HomePage() {
   const router = useRouter();
   const { data, error, mutate } = useSWR<Home>("/api/home", fetcher);
   const [code, setCode] = useState("");
-  useEvents((e) => {
-    if (e.type !== "ready" && e.type !== "location") mutate();
-  });
+  const isOnline = useIsOnline();
+  useEvents(
+    (e) => {
+      if (e.type !== "location") mutate();
+    },
+    [`user:${me.id}`, ...(data?.groups ?? []).map((g) => `group:${g.id}`)],
+  );
 
   if (error) return <ErrorState message="Couldn't load your home." />;
   if (!data) return <PageLoader />;
@@ -47,7 +52,7 @@ export default function HomePage() {
           <div className="bg-volt p-6">
             <div className="text-4xl">👯</div>
             <h2 className="font-display mt-3 text-2xl font-extrabold">Start your first crew</h2>
-            <p className="mt-1 max-w-sm text-volt-ink">Make a group, invite your friends, and Where2 will find somewhere that works for all of you.</p>
+            <p className="mt-1 max-w-sm text-volt-ink">Make a group, invite your friends, and Meeti will find somewhere that works for all of you.</p>
           </div>
           <div className="flex flex-wrap gap-2 p-5">
             <Link href="/groups/new" className="btn btn-ink">
@@ -97,7 +102,7 @@ export default function HomePage() {
                     <div className="font-display truncate text-lg font-bold">{g.name}</div>
                     <div className="flex items-center gap-1 truncate whitespace-nowrap text-sm text-muted">
                       <Users className="h-3.5 w-3.5" /> {g.memberCount} {g.memberCount === 1 ? "member" : "members"}
-                      {g.members.some((m) => m.online) && <span className="ml-1 text-mint">· {g.members.filter((m) => m.online).length} online</span>}
+                      {g.members.some(isOnline) && <span className="ml-1 text-mint">· {g.members.filter(isOnline).length} online</span>}
                     </div>
                   </div>
                   <AvatarStack users={g.members} size={28} max={3} />

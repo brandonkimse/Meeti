@@ -10,7 +10,7 @@ export const GET = handle(async () => {
 export const PATCH = handle(async (req) => {
   const u = await requireUser();
   const b = await readBody(req);
-  if (b.name !== undefined) run("UPDATE users SET name = ? WHERE id = ?", str(b.name, "Name", { min: 1, max: 40 }), u.id);
-  if (b.avatarUrl !== undefined) run("UPDATE users SET avatar_url = ? WHERE id = ?", imageDataUrl(b.avatarUrl, "Photo"), u.id);
+  if (b.name !== undefined) await run("UPDATE users SET name = ? WHERE id = ?", str(b.name, "Name", { min: 1, max: 40 }), u.id);
+  if (b.avatarUrl !== undefined) await run("UPDATE users SET avatar_url = ? WHERE id = ?", imageDataUrl(b.avatarUrl, "Photo"), u.id);
   return { ok: true };
 });

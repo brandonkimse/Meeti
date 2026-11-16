@@ -5,5 +5,5 @@ import { listGroups, upcomingForUser } from "@/server/services/groups";
 
 export const GET = handle(async () => {
   const u = await requireUser();
-  return { groups: listGroups(u.id), upcoming: upcomingForUser(u.id), providers: providerStatus() };
+  return { groups: await listGroups(u.id), upcoming: await upcomingForUser(u.id), providers: providerStatus() };
 });

@@ -8,8 +8,8 @@ const display = Bricolage_Grotesque({ subsets: ["latin"], variable: "--font-disp
 const body = Figtree({ subsets: ["latin"], variable: "--font-body" });
 
 export const metadata: Metadata = {
-  title: "Where2 · Meet in the middle, fairly",
-  description: "Where2 helps friend groups pick a fair place to meet, vote on it together, and see everyone arrive.",
+  title: "Meeti · Meet in the middle, fairly",
+  description: "Meeti helps friend groups pick a fair place to meet, vote on it together, and see everyone arrive.",
 };
 
 export const viewport: Viewport = {

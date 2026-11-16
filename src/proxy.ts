@@ -1,17 +1,42 @@
+import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { SUPABASE_ANON_KEY, SUPABASE_URL } from "@/lib/supabase/env";
 
 const APP_PREFIXES = ["/home", "/groups", "/hangouts", "/profile"];
 
-/** Fast cookie check; the (app) layout does the real session validation. */
-export function proxy(req: NextRequest) {
+/**
+ * Refreshes the Supabase auth session on every request (keeps cookies fresh),
+ * and sends signed-out visitors of app pages to the login screen.
+ */
+export async function proxy(req: NextRequest) {
+  let res = NextResponse.next({ request: req });
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return res;
+
+  const supabase = createServerClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    cookies: {
+      getAll: () => req.cookies.getAll(),
+      setAll: (list) => {
+        for (const { name, value } of list) req.cookies.set(name, value);
+        res = NextResponse.next({ request: req });
+        for (const { name, value, options } of list) res.cookies.set(name, value, options);
+      },
+    },
+  });
+  const { data } = await supabase.auth.getUser();
+
   const { pathname, search } = req.nextUrl;
-  if (APP_PREFIXES.some((p) => pathname === p || pathname.startsWith(p + "/")) && !req.cookies.get("w2_session")) {
+  if (!data.user && APP_PREFIXES.some((p) => pathname === p || pathname.startsWith(p + "/"))) {
     const url = req.nextUrl.clone();
     url.pathname = "/login";
     url.search = `?next=${encodeURIComponent(pathname + search)}`;
-    return NextResponse.redirect(url);
+    const redirect = NextResponse.redirect(url);
+    for (const c of res.cookies.getAll()) redirect.cookies.set(c);
+    return redirect;
   }
-  return NextResponse.next();
+  return res;
 }
 
-export const config = { matcher: ["/home/:path*", "/groups/:path*", "/hangouts/:path*", "/profile/:path*"] };
+export const config = {
+  // Everything except static assets and images.
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)"],
+};

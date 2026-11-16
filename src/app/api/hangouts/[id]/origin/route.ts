@@ -14,7 +14,7 @@ export const PUT = handle<Ctx>(async (req, { params }) => {
   const source = oneOf(b.source, "Source", ["gps", "manual"] as const);
   let label = str(b.label, "Label", { optional: true, max: 120 }) || null;
   if (!label) label = (await reverseGeocode(point)) ?? "Pinned location";
-  setOrigin(u.id, (await params).id, {
+  await setOrigin(u.id, (await params).id, {
     ...point,
     label,
     source,
@@ -25,6 +25,6 @@ export const PUT = handle<Ctx>(async (req, { params }) => {
 
 export const DELETE = handle<Ctx>(async (_req, { params }) => {
   const u = await requireUser();
-  setOrigin(u.id, (await params).id, null);
+  await setOrigin(u.id, (await params).id, null);
   return { ok: true };
 });

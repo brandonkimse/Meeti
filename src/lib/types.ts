@@ -115,7 +115,7 @@ export type Suggestion = {
   imageUrl: string | null;
   rating: number | null;
   ratingCount: number | null;
-  source: "member" | "where2";
+  source: "member" | "meeti";
   addedBy: string | null;
   travel: TravelSummary | null;
   travelStale: boolean;

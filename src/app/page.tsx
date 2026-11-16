@@ -94,7 +94,7 @@ export default async function Landing() {
             </span>
           </h1>
           <p className="mt-6 max-w-md text-lg text-muted">
-            Where2 finds spots that are fair for everyone&apos;s commute. Your group votes on one, and then you watch each other show up on a live map.
+            Meeti finds spots that are fair for everyone&apos;s commute. Your group votes on one, and then you watch each other show up on a live map.
           </p>
           <div className="mt-8 flex flex-wrap gap-3">
             <Link href="/signup" className="btn btn-volt btn-lg">

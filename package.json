@@ -1,5 +1,5 @@
 {
-  "name": "where2",
+  "name": "meeti",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -8,15 +8,18 @@
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "dev:demo": "WHERE2_DEMO_MODE=true next dev"
+    "dev:demo": "MEETI_DEMO_MODE=true next dev"
   },
   "engines": {
-    "node": ">=22.13"
+    "node": ">=20"
   },
   "dependencies": {
+    "@supabase/ssr": "^0.12.7",
+    "@supabase/supabase-js": "^2.119.0",
     "leaflet": "1.9",
     "lucide-react": "^1.73.0",
     "next": "^16.4.6",
+    "postgres": "^4.1.1",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
     "server-only": "^0.0.1",

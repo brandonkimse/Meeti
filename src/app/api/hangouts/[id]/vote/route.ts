@@ -7,7 +7,7 @@ export const PUT = handle<{ params: Promise<{ id: string }> }>(async (req, { par
   const u = await requireUser();
   const id = (await params).id;
   const b = await readBody(req);
-  vote(u.id, id, b.suggestionId ? str(b.suggestionId, "Option") : null);
+  await vote(u.id, id, b.suggestionId ? str(b.suggestionId, "Option") : null);
   demoReact(id);
   return { ok: true };
 });

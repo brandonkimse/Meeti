@@ -30,7 +30,7 @@ type PhotonFeature = {
 };
 type PhotonResponse = { features: PhotonFeature[] };
 
-/** OSM tags that make up each Where2 category. */
+/** OSM tags that make up each Meeti category. */
 export const CATEGORY_TAGS: Record<Category, string[]> = {
   food: ["amenity:restaurant", "amenity:fast_food", "amenity:food_court"],
   cafe: ["amenity:cafe", "amenity:ice_cream", "shop:bakery"],
@@ -206,7 +206,7 @@ export async function nearbyPlaces(center: LatLng, radiusM: number, category: Ca
     try {
       out = await googleNearby(center, radiusM, category);
     } catch (e) {
-      console.warn("[where2] Google Places failed, falling back to OSM:", (e as Error).message);
+      console.warn("[meeti] Google Places failed, falling back to OSM:", (e as Error).message);
       out = await photonNearby(center, radiusM, category);
     }
   } else {

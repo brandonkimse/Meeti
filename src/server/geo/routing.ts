@@ -29,12 +29,12 @@ type OsrmRoute = {
 /**
  * Public routing servers are shared, rate-limited resources. Requests to each
  * host are serialized with a minimum gap and retried with backoff on HTTP 429.
- * Self-hosted OSRM can raise the throughput via WHERE2_ROUTING_CONCURRENCY / _GAP_MS.
+ * Self-hosted OSRM can raise the throughput via MEETI_ROUTING_CONCURRENCY / _GAP_MS.
  */
 type Lane = { active: number; last: number; queue: (() => void)[] };
 const lanes = new Map<string, Lane>();
-const MAX_CONCURRENT = Number(process.env.WHERE2_ROUTING_CONCURRENCY || 1);
-const MIN_GAP_MS = Number(process.env.WHERE2_ROUTING_GAP_MS ?? 1000);
+const MAX_CONCURRENT = Number(process.env.MEETI_ROUTING_CONCURRENCY || 1);
+const MIN_GAP_MS = Number(process.env.MEETI_ROUTING_GAP_MS ?? 1000);
 
 async function limited<T>(url: string, fn: () => Promise<T>): Promise<T> {
   const host = new URL(url).host;
@@ -163,7 +163,7 @@ async function matrixForEngine(engine: Engine, sources: Origin[], dests: LatLng[
       legs = engine === "google-transit" ? await googleTransit(sources, ds, departAt) : await osrmTable(engine, sources, ds);
       legs = legs.map((row, i) => row.map((l) => adapt(l, sources[i].mode, engine)));
     } catch (err) {
-      console.warn(`[where2] routing fallback (${engine}):`, (err as Error).message);
+      console.warn(`[meeti] routing fallback (${engine}):`, (err as Error).message);
       legs = sources.map((s) => ds.map((d) => ({ ...modelSeconds(s, d, s.mode), source: "model" as const })));
     }
     c.forEach((x, j) => sources.forEach((_, i) => (out[i][x.i] = legs[i][j])));

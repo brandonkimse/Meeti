@@ -20,7 +20,7 @@ export const POST = handle<{ params: Promise<{ id: string }> }>(async (req, { pa
     rating: b.rating != null ? num(b.rating, "Rating", { min: 0, max: 5 }) : null,
     ratingCount: b.ratingCount != null ? num(b.ratingCount, "Rating count", { min: 0 }) : null,
   };
-  const source = b.source === "where2" ? "where2" : "member";
+  const source = b.source === "meeti" ? "meeti" : "member";
   const sid = await addSuggestion(u.id, id, place, source);
   demoReact(id);
   return { id: sid };

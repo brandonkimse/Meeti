@@ -70,6 +70,15 @@ export function LiveView({ h, mutate, trails }: { h: HangoutDetail; mutate: Muta
   const [expanded, setExpanded] = useState(true);
 
   const sharingActive = myShare?.status === "active" && !myShare.arrivedAt;
+
+  // Demo mode: this screen drives the simulated friends' journeys.
+  useEffect(() => {
+    if (!h.providers.demoMode) return;
+    const tick = () => api(`/api/hangouts/${h.id}/demo-tick`, { body: {} }).catch(() => {});
+    tick();
+    const t = setInterval(tick, 2000);
+    return () => clearInterval(t);
+  }, [h.id, h.providers.demoMode]);
   const gps = useLocationSender(h.id, sharingActive && !simulating, () => mutate());
 
   const viewers = h.participants.filter((p) => p.rsvp !== "declined" && p.user.id !== meId);

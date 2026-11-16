@@ -4,6 +4,6 @@ import { leaveGroup } from "@/server/services/groups";
 
 export const POST = handle<{ params: Promise<{ id: string }> }>(async (_req, { params }) => {
   const u = await requireUser();
-  leaveGroup(u.id, (await params).id);
+  await leaveGroup(u.id, (await params).id);
   return { ok: true };
 });

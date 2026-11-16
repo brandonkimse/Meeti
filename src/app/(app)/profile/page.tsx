@@ -90,7 +90,7 @@ export default function Profile() {
       <div className="card flex gap-3 p-5">
         <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-mint" />
         <div className="text-sm">
-          <div className="font-bold">How Where2 handles your location</div>
+          <div className="font-bold">How Meeti handles your location</div>
           <ul className="mt-1 list-disc space-y-1 pl-4 text-muted">
             <li>Your starting point for a plan is shared only with that hangout&apos;s members. You can type a nearby landmark instead of using GPS.</li>
             <li>Live location is off until you turn it on for a specific hangout, and you can pause or stop it at any time.</li>
