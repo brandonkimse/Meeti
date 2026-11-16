@@ -14,12 +14,27 @@ import postgres from "postgres";
 type Sql = postgres.Sql;
 type G = typeof globalThis & { __meetiDb?: { url: string; sql: Sql } };
 
+/**
+ * Serverless hosts pause instances between requests, and pooled connections can
+ * be silently dropped while paused. A query sent on such a dead socket never
+ * gets an answer, so every query has a time limit: on timeout the connection
+ * pool is thrown away, and read-only queries are retried once on a fresh one.
+ */
+const QUERY_TIMEOUT_MS = Number(process.env.DATABASE_QUERY_TIMEOUT_MS || 8000);
+const TX_TIMEOUT_MS = Number(process.env.DATABASE_TX_TIMEOUT_MS || 15000);
+
+export class DbTimeoutError extends Error {
+  name = "DbTimeoutError";
+}
+
 function connect(url: string): Sql {
   return postgres(url, {
     prepare: false,
     max: Number(process.env.DATABASE_POOL_MAX || 5),
-    idle_timeout: 20,
-    connect_timeout: 15,
+    // Short-lived connections suit serverless: fewer chances to reuse a dropped one.
+    idle_timeout: 10,
+    max_lifetime: 60 * 5,
+    connect_timeout: 10,
     // Timestamps are stored as epoch-millisecond bigints; return them as numbers.
     types: {
       bigint: { to: 20, from: [20], serialize: (x: number) => String(x), parse: (x: string) => Number(x) },
@@ -43,6 +58,27 @@ export function sql(): Sql {
   return g.__meetiDb.sql;
 }
 
+/** Drop a pool that may hold dead connections; the next query reconnects. */
+function resetPool(stale: Sql) {
+  const g = globalThis as G;
+  if (g.__meetiDb?.sql === stale) g.__meetiDb = undefined;
+  stale.end({ timeout: 0 }).catch(() => {});
+}
+
+async function withTimeout<T>(work: PromiseLike<T>, ms: number, what: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      Promise.resolve(work),
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new DbTimeoutError(`Database ${what} timed out after ${ms} ms`)), ms);
+      }),
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 const txStore = new AsyncLocalStorage<postgres.TransactionSql>();
 
 export type Param = string | number | boolean | null;
@@ -53,9 +89,26 @@ function toPg(query: string): string {
   return query.replace(/\?/g, () => `$${++i}`);
 }
 
-function exec<T>(query: string, params: Param[]): Promise<T[]> {
-  const conn = txStore.getStore() ?? sql();
-  return conn.unsafe(toPg(query), params as postgres.ParameterOrJSON<never>[]) as unknown as Promise<T[]>;
+const isRetryableRead = (query: string) => /^\s*select\b/i.test(query) && !/realtime\.send/i.test(query);
+
+async function exec<T>(query: string, params: Param[]): Promise<T[]> {
+  const text = toPg(query);
+  const args = params as postgres.ParameterOrJSON<never>[];
+  const label = query.replace(/\s+/g, " ").trim().slice(0, 60);
+  const t = txStore.getStore();
+  // Inside a transaction, the transaction's own time limit applies.
+  if (t) return t.unsafe(text, args) as unknown as Promise<T[]>;
+
+  const client = sql();
+  try {
+    return (await withTimeout(client.unsafe(text, args), QUERY_TIMEOUT_MS, `query "${label}"`)) as unknown as T[];
+  } catch (e) {
+    if (!(e instanceof DbTimeoutError)) throw e;
+    console.warn(`[meeti] ${e.message}; resetting connections`);
+    resetPool(client);
+    if (!isRetryableRead(query)) throw e;
+    return (await withTimeout(sql().unsafe(text, args), QUERY_TIMEOUT_MS, `query "${label}" (retry)`)) as unknown as T[];
+  }
 }
 
 export async function q<T = Row>(query: string, ...params: Param[]): Promise<T[]> {
@@ -73,7 +126,20 @@ export async function run(query: string, ...params: Param[]): Promise<void> {
 /** Run `fn` in a transaction; q/one/run inside it use the transaction automatically. */
 export async function tx<T>(fn: () => Promise<T>): Promise<T> {
   if (txStore.getStore()) return fn();
-  return (await sql().begin((t) => txStore.run(t, fn))) as T;
+  const client = sql();
+  try {
+    return (await withTimeout(
+      client.begin((t) => txStore.run(t, fn)),
+      TX_TIMEOUT_MS,
+      "transaction",
+    )) as T;
+  } catch (e) {
+    if (e instanceof DbTimeoutError) {
+      console.warn(`[meeti] ${e.message}; resetting connections`);
+      resetPool(client);
+    }
+    throw e;
+  }
 }
 
 export function newId(): string {

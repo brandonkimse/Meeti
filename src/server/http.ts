@@ -1,17 +1,28 @@
 import "server-only";
 import { HttpError } from "./auth";
+import { DbTimeoutError } from "./db";
 
-/** Wrap a route handler: JSON in/out and consistent error responses. */
+const SLOW_MS = 8000;
+
+/** Wrap a route handler: JSON in/out, consistent errors, and a log line for slow requests. */
 export function handle<C>(fn: (req: Request, ctx: C) => Promise<unknown>) {
   return async (req: Request, ctx: C) => {
+    const started = Date.now();
     try {
       const out = await fn(req, ctx);
       if (out instanceof Response) return out;
       return Response.json(out ?? { ok: true });
     } catch (e) {
       if (e instanceof HttpError) return Response.json({ error: e.message }, { status: e.status });
+      if (e instanceof DbTimeoutError) {
+        console.error("[meeti]", req.method, new URL(req.url).pathname, e.message);
+        return Response.json({ error: "The database is taking too long to respond. Please try again." }, { status: 503 });
+      }
       console.error("[meeti]", e);
       return Response.json({ error: "Something went wrong. Please try again." }, { status: 500 });
+    } finally {
+      const ms = Date.now() - started;
+      if (ms > SLOW_MS) console.warn(`[meeti] slow request: ${req.method} ${new URL(req.url).pathname} took ${ms} ms`);
     }
   };
 }

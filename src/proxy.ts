@@ -1,6 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
-import { SUPABASE_ANON_KEY, SUPABASE_URL } from "@/lib/supabase/env";
+import { fetchWithTimeout, SUPABASE_ANON_KEY, SUPABASE_URL } from "@/lib/supabase/env";
 
 const APP_PREFIXES = ["/home", "/groups", "/hangouts", "/profile"];
 
@@ -13,6 +13,7 @@ export async function proxy(req: NextRequest) {
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return res;
 
   const supabase = createServerClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    global: { fetch: fetchWithTimeout(8_000) },
     cookies: {
       getAll: () => req.cookies.getAll(),
       setAll: (list) => {
@@ -22,7 +23,8 @@ export async function proxy(req: NextRequest) {
       },
     },
   });
-  const { data } = await supabase.auth.getUser();
+  // If Supabase is unreachable, carry on; the page itself checks the session again.
+  const { data } = await supabase.auth.getUser().catch(() => ({ data: { user: null } }));
 
   const { pathname, search } = req.nextUrl;
   if (!data.user && APP_PREFIXES.some((p) => pathname === p || pathname.startsWith(p + "/"))) {
