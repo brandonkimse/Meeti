@@ -1,36 +1,29 @@
-import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import type { Metadata, Viewport } from "next";
+import { Bricolage_Grotesque, Figtree } from "next/font/google";
+import "leaflet/dist/leaflet.css";
 import "./globals.css";
-import { VibeProvider } from "@/context/VibeContext";
+import { ToastProvider } from "@/components/ui";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
+const display = Bricolage_Grotesque({ subsets: ["latin"], variable: "--font-display-face", weight: ["500", "700", "800"] });
+const body = Figtree({ subsets: ["latin"], variable: "--font-body" });
 
 export const metadata: Metadata = {
-  title: "Sisyphus | Cognitive Task Offloading",
-  description: "An intelligent, AI-driven task management application.",
+  title: "Where2 · Meet in the middle, fairly",
+  description: "Where2 helps friend groups pick a fair place to meet, vote on it together, and see everyone arrive.",
 };
 
-export default function RootLayout({
-  children,
-}: Readonly<{
-  children: React.ReactNode;
-}>) {
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+  themeColor: "#f6f4ef",
+};
+
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased bg-zinc-950 text-zinc-50 selection:bg-zinc-800 selection:text-white`}
-      >
-        <VibeProvider>
-          {children}
-        </VibeProvider>
+    <html lang="en" className={`${display.variable} ${body.variable}`}>
+      <body className="min-h-dvh">
+        <ToastProvider>{children}</ToastProvider>
       </body>
     </html>
   );
