@@ -14,6 +14,7 @@ export type PublicUser = {
   avatarUrl: string | null;
   online: boolean;
   isDemo: boolean;
+  isGuest: boolean;
 };
 
 export type MemberTravel = {
@@ -94,7 +95,7 @@ export type HangoutListItem = {
   destImageUrl: string | null;
   category: Category | null;
   participantCount: number;
-  groupId: string;
+  groupId: string | null;
   groupName?: string;
 };
 
@@ -152,14 +153,15 @@ export type HangoutDetail = {
   pollClosesAt: number | null;
   finalizedAt: number | null;
   completedAt: number | null;
-  group: { id: string; name: string; emoji: string | null; imageUrl: string | null };
+  group: { id: string; name: string; emoji: string | null; imageUrl: string | null } | null;
+  shareCode: string;
   destination: (LatLng & { name: string; address: string | null; imageUrl: string | null; suggestionId: string | null }) | null;
   participants: Participant[];
   suggestions: Suggestion[];
   recommendations: RecommendationSet | null;
   recommendationsStale: boolean;
   shares: LiveShare[];
-  me: { id: string; share: LiveShare | null };
+  me: { id: string; share: LiveShare | null; isGuest: boolean };
   providers: { transit: "google" | "estimate"; places: "google" | "openstreetmap"; demoMode: boolean };
 };
 

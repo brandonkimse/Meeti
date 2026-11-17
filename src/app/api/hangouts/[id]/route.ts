@@ -1,17 +1,17 @@
 import { MODES } from "@/lib/types";
-import { requireUser } from "@/server/auth";
+import { requireActor } from "@/server/auth";
 import { handle, num, oneOf, readBody, str } from "@/server/http";
 import { cancelHangout, getHangout, updateHangout } from "@/server/services/hangouts";
 
 type Ctx = { params: Promise<{ id: string }> };
 
 export const GET = handle<Ctx>(async (_req, { params }) => {
-  const u = await requireUser();
+  const u = await requireActor();
   return getHangout(u.id, (await params).id);
 });
 
 export const PATCH = handle<Ctx>(async (req, { params }) => {
-  const u = await requireUser();
+  const u = await requireActor();
   const b = await readBody(req);
   await updateHangout(u.id, (await params).id, {
     title: b.title !== undefined ? str(b.title, "Title", { min: 1, max: 60 }) : undefined,
@@ -22,7 +22,7 @@ export const PATCH = handle<Ctx>(async (req, { params }) => {
 });
 
 export const DELETE = handle<Ctx>(async (_req, { params }) => {
-  const u = await requireUser();
+  const u = await requireActor();
   await cancelHangout(u.id, (await params).id);
   return { ok: true };
 });

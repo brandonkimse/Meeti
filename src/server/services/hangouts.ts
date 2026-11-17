@@ -1,5 +1,5 @@
 import "server-only";
-import { createHash } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import type {
   Category,
   HangoutDetail,
@@ -20,11 +20,12 @@ import { publish } from "../realtime";
 import { recommend } from "../geo/recommend";
 import { travelMatrix, type Origin } from "../geo/routing";
 import { summarize } from "../geo/util";
-import { assertMember, toPublicUser } from "./groups";
+import { assertMember, membership, toPublicUser } from "./groups";
 
 export type HangoutRow = {
   id: string;
-  group_id: string;
+  group_id: string | null;
+  share_code: string;
   created_by: string;
   title: string;
   starts_at: number;
@@ -57,6 +58,7 @@ type ParticipantRow = {
   name: string;
   avatar_url: string | null;
   is_demo: number;
+  is_guest: number;
 };
 
 type SuggestionRow = {
@@ -95,6 +97,8 @@ export type ShareRow = {
 };
 
 const topic = (id: string) => `hangout:${id}`;
+const groupChanged = (h: { group_id: string | null }) =>
+  h.group_id ? publish(`group:${h.group_id}`, { type: "group.hangouts", groupId: h.group_id }) : Promise.resolve();
 const changed = (id: string, what = "hangout.updated") => publish(topic(id), { type: what, hangoutId: id });
 
 export async function hangoutRow(id: string): Promise<HangoutRow> {
@@ -106,12 +110,17 @@ export async function hangoutRow(id: string): Promise<HangoutRow> {
 /** Loads a hangout the user is allowed to see, applying lifecycle rules first. */
 export async function accessHangout(userId: string, id: string) {
   let h = await hangoutRow(id);
-  const m = await assertMember(userId, h.group_id);
+  // Anyone taking part can see a plan; so can members of its group (if it has one).
+  const [part, m] = await Promise.all([
+    one("SELECT 1 FROM participants WHERE hangout_id = ? AND user_id = ?", h.id, userId),
+    h.group_id ? membership(userId, h.group_id) : Promise.resolve(undefined),
+  ]);
+  if (!part && !m) throw new HttpError(404, "Hangout not found.");
   if (h.status === "live" && now() > h.ends_at) {
     await completeInternal(h.id);
     h = await hangoutRow(id);
   }
-  const canManage = h.created_by === userId || m.role === "owner";
+  const canManage = h.created_by === userId || m?.role === "owner";
   return { h, canManage };
 }
 
@@ -137,7 +146,7 @@ export function toShare(r: ShareRow): LiveShare {
 function participantRows(hangoutId: string) {
   return q<ParticipantRow>(
     `SELECT p.user_id, p.rsvp, p.origin_lat, p.origin_lng, p.origin_label, p.origin_source, p.mode,
-            u.name, u.avatar_url, u.is_demo
+            u.name, u.avatar_url, u.is_demo, u.is_guest
        FROM participants p JOIN profiles u ON u.id = p.user_id
       WHERE p.hangout_id = ? ORDER BY p.seq`,
     hangoutId,
@@ -165,7 +174,9 @@ export function originKey(origins: Origin[]): string {
 export async function getHangout(userId: string, id: string): Promise<HangoutDetail> {
   const { h, canManage } = await accessHangout(userId, id);
   const [g, parts, votes, suggestionRows, shareRows] = await Promise.all([
-    one<{ id: string; name: string; emoji: string | null; image_url: string | null }>("SELECT id, name, emoji, image_url FROM groups WHERE id = ?", h.group_id),
+    h.group_id
+      ? one<{ id: string; name: string; emoji: string | null; image_url: string | null }>("SELECT id, name, emoji, image_url FROM groups WHERE id = ?", h.group_id)
+      : Promise.resolve(undefined),
     participantRows(h.id),
     q<{ user_id: string; suggestion_id: string }>("SELECT user_id, suggestion_id FROM votes WHERE hangout_id = ?", h.id),
     q<SuggestionRow>("SELECT * FROM suggestions WHERE hangout_id = ? ORDER BY created_at", h.id),
@@ -173,7 +184,7 @@ export async function getHangout(userId: string, id: string): Promise<HangoutDet
   ]);
 
   const participants: Participant[] = parts.map((p) => ({
-    user: toPublicUser({ id: p.user_id, name: p.name, avatar_url: p.avatar_url, is_demo: p.is_demo }),
+    user: toPublicUser({ id: p.user_id, name: p.name, avatar_url: p.avatar_url, is_demo: p.is_demo, is_guest: p.is_guest }),
     rsvp: p.rsvp,
     mode: p.mode ?? h.mode,
     origin:
@@ -217,7 +228,8 @@ export async function getHangout(userId: string, id: string): Promise<HangoutDet
     pollClosesAt: h.poll_closes_at,
     finalizedAt: h.finalized_at,
     completedAt: h.completed_at,
-    group: { id: g!.id, name: g!.name, emoji: g!.emoji, imageUrl: g!.image_url },
+    group: g ? { id: g.id, name: g.name, emoji: g.emoji, imageUrl: g.image_url } : null,
+    shareCode: h.share_code,
     destination:
       h.dest_lat != null && h.dest_lng != null
         ? {
@@ -234,25 +246,29 @@ export async function getHangout(userId: string, id: string): Promise<HangoutDet
     recommendations: recs,
     recommendationsStale: !!recs && recs.key !== key,
     shares,
-    me: { id: userId, share: shares.find((s) => s.userId === userId) ?? null },
+    me: { id: userId, share: shares.find((s) => s.userId === userId) ?? null, isGuest: !!parts.find((p) => p.user_id === userId)?.is_guest },
     providers: providerStatus(),
   };
 }
 
+export const newShareCode = () => randomBytes(8).toString("base64url").slice(0, 10);
+
+/** Create a plan, either inside a group (members are added) or on its own (shared by link). */
 export async function createHangout(
   userId: string,
-  groupId: string,
+  groupId: string | null,
   input: { title: string; startsAt: number; durationMin: number; mode: Mode; category: Category | null; pollClosesAt: number | null },
 ) {
-  await assertMember(userId, groupId);
+  if (groupId) await assertMember(userId, groupId);
   const id = newId();
   const t = now();
   await tx(async () => {
     await run(
-      `INSERT INTO hangouts (id, group_id, created_by, title, starts_at, ends_at, mode, category, status, poll_closes_at, created_at)
-       VALUES (?,?,?,?,?,?,?,?, 'planning', ?, ?)`,
+      `INSERT INTO hangouts (id, group_id, share_code, created_by, title, starts_at, ends_at, mode, category, status, poll_closes_at, created_at)
+       VALUES (?,?,?,?,?,?,?,?,?, 'planning', ?, ?)`,
       id,
       groupId,
+      newShareCode(),
       userId,
       input.title,
       input.startsAt,
@@ -264,10 +280,12 @@ export async function createHangout(
     );
     // Creator first, so they're listed first.
     await run("INSERT INTO participants (hangout_id, user_id, rsvp, updated_at) VALUES (?,?, 'going', ?)", id, userId, t);
-    const members = await q<{ user_id: string }>("SELECT user_id FROM memberships WHERE group_id = ? AND user_id != ? ORDER BY joined_at", groupId, userId);
-    for (const m of members) await run("INSERT INTO participants (hangout_id, user_id, rsvp, updated_at) VALUES (?,?, 'going', ?)", id, m.user_id, t);
+    if (groupId) {
+      const members = await q<{ user_id: string }>("SELECT user_id FROM memberships WHERE group_id = ? AND user_id != ? ORDER BY joined_at", groupId, userId);
+      for (const m of members) await run("INSERT INTO participants (hangout_id, user_id, rsvp, updated_at) VALUES (?,?, 'going', ?)", id, m.user_id, t);
+    }
   });
-  await publish(`group:${groupId}`, { type: "group.hangouts", groupId });
+  if (groupId) await publish(`group:${groupId}`, { type: "group.hangouts", groupId });
   return id;
 }
 
@@ -470,7 +488,7 @@ export async function finalize(userId: string, id: string, suggestionId: string)
     id,
   );
   await changed(id, "hangout.finalized");
-  await publish(`group:${h.group_id}`, { type: "group.hangouts", groupId: h.group_id });
+  await groupChanged(h);
 }
 
 async function completeInternal(id: string) {
@@ -485,7 +503,7 @@ async function completeInternal(id: string) {
     await run("DELETE FROM demo_journeys WHERE hangout_id = ?", id);
   });
   await changed(id, "hangout.completed");
-  await publish(`group:${h.group_id}`, { type: "group.hangouts", groupId: h.group_id });
+  await groupChanged(h);
 }
 
 export async function complete(userId: string, id: string) {
@@ -499,7 +517,7 @@ export async function cancelHangout(userId: string, id: string) {
   if (!canManage) throw new HttpError(403, "Only the host can cancel this hangout.");
   await run("DELETE FROM hangouts WHERE id = ?", id);
   await changed(id, "hangout.deleted");
-  await publish(`group:${h.group_id}`, { type: "group.hangouts", groupId: h.group_id });
+  await groupChanged(h);
 }
 
 export async function updateHangout(userId: string, id: string, patch: { title?: string; startsAt?: number; mode?: Mode }) {
@@ -510,6 +528,87 @@ export async function updateHangout(userId: string, id: string, patch: { title?:
   if (patch.startsAt) await run("UPDATE hangouts SET ends_at = ? + (ends_at - starts_at), starts_at = ? WHERE id = ?", patch.startsAt, patch.startsAt, id);
   if (patch.mode) await run("UPDATE hangouts SET mode = ? WHERE id = ?", patch.mode, id);
   await changed(id);
-  await publish(`group:${h.group_id}`, { type: "group.hangouts", groupId: h.group_id });
+  await groupChanged(h);
   if (patch.mode) background(() => refreshTravel(id));
+}
+
+// ---------- Share links ----------
+
+async function hangoutByCode(code: string): Promise<HangoutRow> {
+  const h = await one<HangoutRow>("SELECT * FROM hangouts WHERE share_code = ?", code.trim());
+  if (!h) throw new HttpError(404, "This plan link doesn't work. It may have been cancelled.");
+  return h;
+}
+
+/** Public preview of a plan from its share link (no locations are revealed). */
+export async function previewByShareCode(code: string, actorId: string | null) {
+  const h = await hangoutByCode(code);
+  const [host, people, joined] = await Promise.all([
+    one<{ name: string }>("SELECT name FROM profiles WHERE id = ?", h.created_by),
+    q<{ id: string; name: string; avatar_url: string | null; is_demo: number; is_guest: number }>(
+      `SELECT u.id, u.name, u.avatar_url, u.is_demo, u.is_guest FROM participants p JOIN profiles u ON u.id = p.user_id
+        WHERE p.hangout_id = ? AND p.rsvp != 'declined' ORDER BY p.seq`,
+      h.id,
+    ),
+    actorId ? one("SELECT 1 FROM participants WHERE hangout_id = ? AND user_id = ?", h.id, actorId) : Promise.resolve(undefined),
+  ]);
+  return {
+    hangoutId: h.id,
+    title: h.title,
+    startsAt: h.starts_at,
+    status: h.status,
+    mode: h.mode,
+    category: h.category,
+    destName: h.dest_name,
+    hostName: host?.name ?? "A friend",
+    people: people.map(toPublicUser),
+    joined: !!joined,
+  };
+}
+
+/** Add someone (user or guest) to a plan via its share link. Idempotent. */
+export async function joinByShareCode(actorId: string, code: string): Promise<string> {
+  const h = await hangoutByCode(code);
+  if (h.status === "completed" || h.status === "cancelled") throw new HttpError(409, "This hangout has already happened.");
+  const exists = await one("SELECT 1 FROM participants WHERE hangout_id = ? AND user_id = ?", h.id, actorId);
+  if (!exists) {
+    await run("INSERT INTO participants (hangout_id, user_id, rsvp, updated_at) VALUES (?,?, 'going', ?) ON CONFLICT DO NOTHING", h.id, actorId, now());
+    await changed(h.id);
+  }
+  return h.id;
+}
+
+/** Turn a group-less plan's crew into a group: the host plus everyone with an account. */
+export async function saveAsGroup(userId: string, id: string, name: string, emoji: string | null): Promise<string> {
+  const { h } = await accessHangout(userId, id);
+  if (h.created_by !== userId) throw new HttpError(403, "Only the host can save this crew as a group.");
+  if (h.group_id) return h.group_id;
+  const gid = newId();
+  await tx(async () => {
+    await run(
+      "INSERT INTO groups (id, name, description, image_url, emoji, invite_code, owner_id, created_at) VALUES (?,?,?,?,?,?,?,?)",
+      gid,
+      name,
+      null,
+      null,
+      emoji,
+      newShareCode().toUpperCase().replace(/[^A-Z0-9]/g, "X").slice(0, 8),
+      userId,
+      now(),
+    );
+    await run("INSERT INTO memberships (group_id, user_id, role, joined_at) VALUES (?,?, 'owner', ?)", gid, userId, now());
+    await run(
+      `INSERT INTO memberships (group_id, user_id, role, joined_at)
+       SELECT ?, p.user_id, 'member', ? FROM participants p JOIN profiles u ON u.id = p.user_id
+        WHERE p.hangout_id = ? AND p.user_id != ? AND u.is_guest = 0
+       ON CONFLICT DO NOTHING`,
+      gid,
+      now(),
+      id,
+      userId,
+    );
+    await run("UPDATE hangouts SET group_id = ? WHERE id = ?", gid, id);
+  });
+  await changed(id);
+  return gid;
 }

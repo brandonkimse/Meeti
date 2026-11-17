@@ -28,8 +28,11 @@ export function AppShell({ me, children }: { me: Me; children: ReactNode }) {
                 <Link href="/home" className={`btn btn-ghost btn-sm ${path === "/home" ? "bg-soft" : ""}`}>
                   Home
                 </Link>
-                <Link href="/groups/new" className="btn btn-ink btn-sm">
-                  <Plus className="h-4 w-4" /> New group
+                <Link href="/groups/new" className="btn btn-ghost btn-sm">
+                  New group
+                </Link>
+                <Link href="/plan" className="btn btn-ink btn-sm">
+                  <Plus className="h-4 w-4" /> New plan
                 </Link>
                 <Link href="/profile" className="ml-2">
                   <Avatar user={me} size={36} />
@@ -54,7 +57,7 @@ export function AppShell({ me, children }: { me: Me; children: ReactNode }) {
               <Link href="/home" className={`flex flex-col items-center gap-0.5 text-[11px] font-semibold ${path === "/home" ? "text-ink" : "text-faint"}`}>
                 <Home className="h-5 w-5" /> Home
               </Link>
-              <Link href="/groups/new" className="-mt-7 grid h-14 w-14 place-items-center rounded-full bg-volt text-ink shadow-pop ring-4 ring-paper" aria-label="New group">
+              <Link href="/plan" className="-mt-7 grid h-14 w-14 place-items-center rounded-full bg-volt text-ink shadow-pop ring-4 ring-paper" aria-label="New plan">
                 <Plus className="h-6 w-6" strokeWidth={2.6} />
               </Link>
               <Link href="/profile" className={`flex flex-col items-center gap-0.5 text-[11px] font-semibold ${path === "/profile" ? "text-ink" : "text-faint"}`}>

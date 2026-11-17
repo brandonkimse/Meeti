@@ -60,12 +60,22 @@ export function Stepper({ active, onPick, done }: { active: StepId; onPick?: (s:
   );
 }
 
+/** Where "back" goes: the plan's group, home, or nowhere (guests have no home). */
+export function backLink(h: HangoutDetail): { href: string; label: string } | null {
+  if (h.group) return { href: `/groups/${h.group.id}`, label: `${h.group.emoji ?? ""} ${h.group.name}`.trim() };
+  if (h.me.isGuest) return null;
+  return { href: "/home", label: "Home" };
+}
+
 export function HangoutHeader({ h }: { h: HangoutDetail }) {
+  const back = backLink(h);
   return (
     <div>
-      <Link href={`/groups/${h.group.id}`} className="btn btn-ghost btn-sm -ml-3 text-muted">
-        <ArrowLeft className="h-4 w-4" /> {h.group.emoji} {h.group.name}
-      </Link>
+      {back && (
+        <Link href={back.href} className="btn btn-ghost btn-sm -ml-3 text-muted">
+          <ArrowLeft className="h-4 w-4" /> {back.label}
+        </Link>
+      )}
       <h1 className="font-display mt-1 text-3xl font-extrabold leading-tight">{h.title}</h1>
       <p className="mt-0.5 text-sm font-semibold text-muted">
         {when(h.startsAt)} · {modeOf(h.mode).emoji} {modeOf(h.mode).label} by default

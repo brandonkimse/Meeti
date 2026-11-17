@@ -11,7 +11,7 @@ import type { HangoutDetail, LatLng, LiveShare } from "@/lib/types";
 import { MapView, avatarPinHtml, destPinHtml, type MapLine, type MapMarker } from "../MapView";
 import { PlaceCover } from "../PlaceCover";
 import { Avatar, AvatarStack, Sheet, Spinner, useToast } from "../ui";
-import { categoryEmoji, modeOf, STATE_UI, travelState, type Mutate } from "./shared";
+import { backLink, categoryEmoji, modeOf, STATE_UI, travelState, type Mutate } from "./shared";
 
 type GpsState = { status: "idle" | "waiting" | "ok" | "denied" | "error"; accuracy?: number };
 
@@ -62,6 +62,7 @@ export function LiveView({ h, mutate, trails }: { h: HangoutDetail; mutate: Muta
   const dest = h.destination!;
   const myShare = h.me.share;
   const myState = travelState(myShare);
+  const back = backLink(h);
   const [simulating, setSimulating] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [consentOpen, setConsentOpen] = useState(false);
@@ -154,9 +155,11 @@ export function LiveView({ h, mutate, trails }: { h: HangoutDetail; mutate: Muta
       <div className="absolute inset-0 lg:relative">
         <MapView markers={markers} lines={lines} fitPoints={fitPoints} fitKey={fitKey} padding={[60, 90]} paddingBottom={0} />
         <div className="pointer-events-none absolute inset-x-0 top-0 z-[500] flex items-start gap-2 p-3">
-          <Link href={`/groups/${h.group.id}`} className="btn btn-outline pointer-events-auto p-2.5 shadow-card" aria-label="Back">
-            <ArrowLeft className="h-5 w-5" />
-          </Link>
+          {back && (
+            <Link href={back.href} className="btn btn-outline pointer-events-auto p-2.5 shadow-card" aria-label="Back">
+              <ArrowLeft className="h-5 w-5" />
+            </Link>
+          )}
           <div className="pointer-events-auto min-w-0 flex-1 rounded-2xl bg-white/95 px-3.5 py-2 shadow-card backdrop-blur lg:hidden">
             <div className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-[#0f8a5f]">
               <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-mint" /> Live · {h.title}

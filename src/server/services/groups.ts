@@ -5,11 +5,11 @@ import { HttpError } from "../auth";
 import { newId, now, one, q, run, tx } from "../db";
 import { publish } from "../realtime";
 
-type UserRow = { id: string; name: string; avatar_url: string | null; is_demo: number };
+type UserRow = { id: string; name: string; avatar_url: string | null; is_demo: number; is_guest?: number };
 
 /** `online` is filled in by the browser from Realtime presence; demo friends are always online. */
 export function toPublicUser(u: UserRow): PublicUser {
-  return { id: u.id, name: u.name, avatarUrl: u.avatar_url, online: !!u.is_demo, isDemo: !!u.is_demo };
+  return { id: u.id, name: u.name, avatarUrl: u.avatar_url, online: !!u.is_demo, isDemo: !!u.is_demo, isGuest: !!u.is_guest };
 }
 
 const ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -65,8 +65,8 @@ type HangoutRow = {
   dest_name: string | null;
   dest_image_url: string | null;
   category: HangoutListItem["category"];
-  group_id: string;
-  group_name?: string;
+  group_id: string | null;
+  group_name?: string | null;
   participant_count: number;
 };
 
@@ -83,7 +83,7 @@ export function toListItem(h: HangoutRow): HangoutListItem {
     category: h.category,
     participantCount: h.participant_count,
     groupId: h.group_id,
-    groupName: h.group_name,
+    groupName: h.group_name ?? undefined,
   };
 }
 
@@ -121,14 +121,32 @@ export async function listGroups(userId: string): Promise<GroupSummary[]> {
   return Promise.all(rows.map(summary));
 }
 
+const TAKES_PART = `(EXISTS (SELECT 1 FROM participants p WHERE p.hangout_id = h.id AND p.user_id = ?)
+   OR EXISTS (SELECT 1 FROM memberships m WHERE m.group_id = h.group_id AND m.user_id = ?))`;
+
+/** Plans in progress that this person is part of: through a group or a share link. */
 export async function upcomingForUser(userId: string): Promise<HangoutListItem[]> {
   const rows = await q<HangoutRow>(
     `SELECT ${HANGOUT_COLS}, g.name AS group_name FROM hangouts h
-       JOIN groups g ON g.id = h.group_id
-       JOIN memberships m ON m.group_id = h.group_id AND m.user_id = ?
-      WHERE h.status IN ('planning','live')
+       LEFT JOIN groups g ON g.id = h.group_id
+      WHERE h.status IN ('planning','live') AND ${TAKES_PART}
       ORDER BY h.status = 'live' DESC, h.starts_at`,
     userId,
+    userId,
+  );
+  return rows.map(toListItem);
+}
+
+/** Recently finished plans, so group-less plans still have a history. */
+export async function recentForUser(userId: string, limit = 5): Promise<HangoutListItem[]> {
+  const rows = await q<HangoutRow>(
+    `SELECT ${HANGOUT_COLS}, g.name AS group_name FROM hangouts h
+       LEFT JOIN groups g ON g.id = h.group_id
+      WHERE h.status = 'completed' AND ${TAKES_PART}
+      ORDER BY h.starts_at DESC LIMIT ?`,
+    userId,
+    userId,
+    limit,
   );
   return rows.map(toListItem);
 }

@@ -2,7 +2,7 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { fetchWithTimeout, SUPABASE_ANON_KEY, SUPABASE_URL } from "@/lib/supabase/env";
 
-const APP_PREFIXES = ["/home", "/groups", "/hangouts", "/profile"];
+const APP_PREFIXES = ["/home", "/groups", "/hangouts", "/profile", "/plan"];
 
 /**
  * Refreshes the Supabase auth session on every request (keeps cookies fresh),

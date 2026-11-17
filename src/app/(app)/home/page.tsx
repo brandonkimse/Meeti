@@ -14,7 +14,7 @@ import { firstName, when } from "@/lib/client/format";
 import { useEvents } from "@/lib/client/useEvents";
 import type { GroupSummary, HangoutListItem } from "@/lib/types";
 
-type Home = { groups: GroupSummary[]; upcoming: HangoutListItem[] };
+type Home = { groups: GroupSummary[]; upcoming: HangoutListItem[]; recent: HangoutListItem[] };
 
 function greeting() {
   const h = new Date().getHours();
@@ -47,20 +47,23 @@ export default function HomePage() {
         <h1 className="font-display text-4xl font-extrabold">{firstName(me.name)} ✌️</h1>
       </section>
 
-      {data.groups.length === 0 ? (
-        <section className="card animate-rise overflow-hidden">
-          <div className="bg-volt p-6">
-            <div className="text-4xl">👯</div>
-            <h2 className="font-display mt-3 text-2xl font-extrabold">Start your first crew</h2>
-            <p className="mt-1 max-w-sm text-volt-ink">Make a group, invite your friends, and Meeti will find somewhere that works for all of you.</p>
-          </div>
-          <div className="flex flex-wrap gap-2 p-5">
-            <Link href="/groups/new" className="btn btn-ink">
-              <Plus className="h-4 w-4" /> Create a group
+      <section className="card animate-rise overflow-hidden">
+        <div className="bg-volt p-6">
+          <div className="text-4xl">📍</div>
+          <h2 className="font-display mt-3 text-2xl font-extrabold">Where should we meet?</h2>
+          <p className="mt-1 max-w-sm text-volt-ink">Start a plan and send one link to your group chat. Friends add where they&apos;re coming from and vote. No account needed.</p>
+        </div>
+        <div className="flex flex-wrap gap-2 p-5">
+          <Link href="/plan" className="btn btn-ink">
+            <Plus className="h-4 w-4" /> Plan a hangout
+          </Link>
+          {data.groups.length === 0 && (
+            <Link href="/groups/new" className="btn btn-ghost">
+              Or make a group for regulars
             </Link>
-          </div>
-        </section>
-      ) : null}
+          )}
+        </div>
+      </section>
 
       {live.length > 0 && (
         <section className="space-y-3">
@@ -75,6 +78,15 @@ export default function HomePage() {
         <section className="space-y-3">
           <h2 className="font-display text-lg font-bold">In the works</h2>
           {planning.map((h) => (
+            <HangoutCard key={h.id} h={h} showGroup />
+          ))}
+        </section>
+      )}
+
+      {data.recent.length > 0 && (
+        <section className="space-y-3">
+          <h2 className="font-display text-lg font-bold">Recent</h2>
+          {data.recent.map((h) => (
             <HangoutCard key={h.id} h={h} showGroup />
           ))}
         </section>

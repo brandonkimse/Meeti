@@ -1,4 +1,4 @@
-import { HttpError } from "@/server/auth";
+import { claimGuest, HttpError } from "@/server/auth";
 import { handle, readBody, str } from "@/server/http";
 import { supabaseServer } from "@/server/supabase";
 
@@ -19,5 +19,6 @@ export const POST = handle(async (req) => {
   });
   if (error) throw new HttpError(400, error.message);
   // With email confirmation on (Supabase's default), there's no session until the link is clicked.
+  if (data.session && data.user) await claimGuest(data.user.id);
   return { ok: true, needsConfirmation: !data.session };
 });

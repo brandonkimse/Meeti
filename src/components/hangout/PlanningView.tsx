@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, ArrowRight, Check, ChevronDown, Crosshair, Info, Keyboard, Lock, Sparkles, Star, Trash2, X } from "lucide-react";
+import { ArrowLeft, ArrowRight, Check, ChevronDown, Crosshair, Info, Keyboard, Lock, Sparkles, Star, Trash2, UserPlus, X } from "lucide-react";
 import { api } from "@/lib/client/api";
 import { useNow } from "@/lib/client/useNow";
 import { palette } from "@/lib/client/colors";
@@ -13,7 +13,8 @@ import { MapView, avatarPinHtml, numberPinHtml, type MapLine, type MapMarker } f
 import { PlaceCover } from "../PlaceCover";
 import { TravelBars, TravelChips, TravelStats } from "../TravelBreakdown";
 import { Avatar, AvatarStack, Segmented, Sheet, Spinner, useToast } from "../ui";
-import { HangoutHeader, modeOf, Stepper, type Mutate, type StepId } from "./shared";
+import { backLink, HangoutHeader, modeOf, Stepper, type Mutate, type StepId } from "./shared";
+import { ShareSheet } from "./ShareSheet";
 
 type Tab = Exclude<StepId, "live">;
 
@@ -29,6 +30,9 @@ export function PlanningView({ h, mutate }: { h: HangoutDetail; mutate: Mutate }
 
   const initialTab: Tab = !me?.origin ? "start" : h.suggestions.length ? "vote" : "places";
   const [tab, setTab] = useState<Tab>(initialTab);
+  // Open the invite sheet straight away for a plan that was just created.
+  const [shareOpen, setShareOpen] = useState(() => typeof window !== "undefined" && new URLSearchParams(window.location.search).get("invite") === "1");
+  const back = backLink(h);
   const panel = useRef<HTMLDivElement>(null);
   const firstTab = useRef(true);
   useEffect(() => {
@@ -115,9 +119,11 @@ export function PlanningView({ h, mutate }: { h: HangoutDetail; mutate: Mutate }
     <div className="lg:grid lg:h-dvh lg:grid-cols-[minmax(0,1fr)_480px]">
       <div className="relative h-[40dvh] min-h-[260px] lg:h-full">
         <MapView markers={markers} lines={lines} fitPoints={fitPoints} fitKey={fitKey} padding={[56, 56]} />
-        <Link href={`/groups/${h.group.id}`} className="btn btn-outline absolute left-3 top-3 z-[500] p-2.5 shadow-card lg:hidden" aria-label="Back">
-          <ArrowLeft className="h-5 w-5" />
-        </Link>
+        {back && (
+          <Link href={back.href} className="btn btn-outline absolute left-3 top-3 z-[500] p-2.5 shadow-card lg:hidden" aria-label="Back">
+            <ArrowLeft className="h-5 w-5" />
+          </Link>
+        )}
         {!fitPoints.length && (
           <div className="pointer-events-none absolute inset-0 z-[400] grid place-items-center">
             <div className="rounded-2xl bg-white/95 px-4 py-3 text-center text-sm font-semibold shadow-card">Add starting points to see everyone on the map</div>
@@ -126,21 +132,29 @@ export function PlanningView({ h, mutate }: { h: HangoutDetail; mutate: Mutate }
       </div>
 
       <div ref={panel} className="relative -mt-6 scroll-mt-0 rounded-t-3xl bg-paper px-4 pb-28 pt-5 sm:px-6 lg:mt-0 lg:overflow-y-auto lg:rounded-none lg:pb-10">
-        <div className="hidden lg:block">
-          <HangoutHeader h={h} />
-        </div>
-        <div className="lg:hidden">
-          <h1 className="font-display text-2xl font-extrabold leading-tight">{h.title}</h1>
-          <p className="text-sm font-semibold text-muted">
-            {h.group.emoji} {h.group.name} · {new Date(h.startsAt).toLocaleString([], { weekday: "short", hour: "numeric", minute: "2-digit" })}
-          </p>
+        <div className="flex items-start gap-3">
+          <div className="min-w-0 flex-1">
+            <div className="hidden lg:block">
+              <HangoutHeader h={h} />
+            </div>
+            <div className="lg:hidden">
+              <h1 className="font-display text-2xl font-extrabold leading-tight">{h.title}</h1>
+              <p className="text-sm font-semibold text-muted">
+                {h.group ? `${h.group.emoji ?? ""} ${h.group.name} · ` : ""}
+                {new Date(h.startsAt).toLocaleString([], { weekday: "short", hour: "numeric", minute: "2-digit" })}
+              </p>
+            </div>
+          </div>
+          <button className="btn btn-volt btn-sm mt-1 shrink-0" onClick={() => setShareOpen(true)}>
+            <UserPlus className="h-4 w-4" /> Invite
+          </button>
         </div>
         <div className="mt-4">
           <Stepper active={tab} onPick={(s) => s !== "live" && setTab(s)} done={{ start: !!me?.origin, places: h.suggestions.length > 0, vote: !!h.suggestions.find((s) => s.votes.includes(meId)) }} />
         </div>
 
         <div className="mt-5">
-          {tab === "start" && <StartTab h={h} mutate={mutate} onNext={() => setTab(h.suggestions.length ? "vote" : "places")} />}
+          {tab === "start" && <StartTab h={h} mutate={mutate} onNext={() => setTab(h.suggestions.length ? "vote" : "places")} onInvite={() => setShareOpen(true)} />}
           {tab === "places" && (
             <PlacesTab h={h} mutate={mutate} category={category} setCategory={setCategory} recs={recs} center={center} active={active} setActive={setActive} onAdded={() => toast("Added to the vote ✓")} goVote={() => setTab("vote")} />
           )}
@@ -151,13 +165,14 @@ export function PlanningView({ h, mutate }: { h: HangoutDetail; mutate: Mutate }
       </div>
 
       <FinalizeSheet h={h} open={finalizeOpen} onClose={() => setFinalizeOpen(false)} mutate={mutate} />
+      <ShareSheet h={h} open={shareOpen} onClose={() => setShareOpen(false)} />
     </div>
   );
 }
 
 /* ================= Start points ================= */
 
-function StartTab({ h, mutate, onNext }: { h: HangoutDetail; mutate: Mutate; onNext: () => void }) {
+function StartTab({ h, mutate, onNext, onInvite }: { h: HangoutDetail; mutate: Mutate; onNext: () => void; onInvite: () => void }) {
   const toast = useToast();
   const meId = h.me.id;
   const me = h.participants.find((p) => p.user.id === meId)!;
@@ -197,6 +212,22 @@ function StartTab({ h, mutate, onNext }: { h: HangoutDetail; mutate: Mutate; onN
 
   return (
     <div className="space-y-6">
+      {others === 0 && (
+        <section className="card animate-rise overflow-hidden">
+          <div className="flex items-center gap-3 bg-volt p-4">
+            <span className="text-3xl">👋</span>
+            <div className="min-w-0 flex-1">
+              <div className="font-display font-bold">It&apos;s just you so far</div>
+              <div className="text-sm text-volt-ink">Send the link to your group chat. Friends join without an account.</div>
+            </div>
+          </div>
+          <div className="p-3">
+            <button className="btn btn-ink w-full" onClick={onInvite}>
+              <UserPlus className="h-4 w-4" /> Invite friends
+            </button>
+          </div>
+        </section>
+      )}
       <section className="card p-4">
         <div className="flex items-center gap-3">
           <Avatar user={me.user} size={40} />
@@ -294,7 +325,10 @@ function StartTab({ h, mutate, onNext }: { h: HangoutDetail; mutate: Mutate; onN
             <div key={p.user.id} className={`flex items-center gap-3 p-3 ${p.rsvp === "declined" ? "opacity-50" : ""}`}>
               <Avatar user={p.user} size={36} showOnline />
               <div className="min-w-0 flex-1">
-                <div className="truncate text-sm font-semibold">{p.user.id === meId ? "You" : p.user.name}</div>
+                <div className="truncate text-sm font-semibold">
+                  {p.user.id === meId ? "You" : p.user.name}
+                  {p.user.isGuest && <span className="ml-1.5 rounded-full bg-soft px-1.5 py-0.5 text-[10px] font-bold text-muted">guest</span>}
+                </div>
                 <div className="truncate text-xs text-muted">
                   {p.rsvp === "declined" ? "Can't make it" : p.origin ? p.origin.label ?? "Starting point set" : "Hasn't added a starting point"}
                 </div>
