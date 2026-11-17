@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import useSWR from "swr";
-import { ArrowRight, Plus, Users } from "lucide-react";
+import { ArrowRight, ChevronDown, Plus, Users } from "lucide-react";
 import { useMe } from "@/components/AppShell";
 import { useIsOnline } from "@/components/Online";
 import { HangoutCard } from "@/components/HangoutCard";
@@ -69,7 +69,7 @@ export default function HomePage() {
         <section className="space-y-3">
           <h2 className="font-display text-lg font-bold">Happening now</h2>
           {live.map((h) => (
-            <HangoutCard key={h.id} h={h} showGroup />
+            <HangoutCard key={h.id} h={h} showGroup onChanged={() => mutate()} />
           ))}
         </section>
       )}
@@ -78,7 +78,7 @@ export default function HomePage() {
         <section className="space-y-3">
           <h2 className="font-display text-lg font-bold">In the works</h2>
           {planning.map((h) => (
-            <HangoutCard key={h.id} h={h} showGroup />
+            <HangoutCard key={h.id} h={h} showGroup onChanged={() => mutate()} />
           ))}
         </section>
       )}
@@ -87,10 +87,12 @@ export default function HomePage() {
         <section className="space-y-3">
           <h2 className="font-display text-lg font-bold">Recent</h2>
           {data.recent.map((h) => (
-            <HangoutCard key={h.id} h={h} showGroup />
+            <HangoutCard key={h.id} h={h} showGroup onChanged={() => mutate()} />
           ))}
         </section>
       )}
+
+      <ArchivedSection onChanged={() => mutate()} />
 
       {data.groups.length > 0 && (
         <section>
@@ -151,5 +153,36 @@ export default function HomePage() {
         </form>
       </section>
     </div>
+  );
+}
+
+/** Plans you've archived, loaded only when opened. */
+function ArchivedSection({ onChanged }: { onChanged: () => void }) {
+  const [open, setOpen] = useState(false);
+  const { data, mutate } = useSWR<{ items: HangoutListItem[] }>(open ? "/api/archived" : null, fetcher);
+  return (
+    <section className="space-y-3">
+      <button className="flex items-center gap-1.5 text-sm font-bold text-muted hover:text-ink" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
+        <ChevronDown className={`h-4 w-4 transition-transform ${open ? "" : "-rotate-90"}`} /> Archived
+      </button>
+      {open &&
+        (!data ? (
+          <p className="text-sm text-muted">Loading…</p>
+        ) : data.items.length === 0 ? (
+          <p className="text-sm text-muted">Nothing archived. Past hangouts can be archived from their ⋯ menu.</p>
+        ) : (
+          data.items.map((h) => (
+            <HangoutCard
+              key={h.id}
+              h={h}
+              showGroup
+              onChanged={() => {
+                mutate();
+                onChanged();
+              }}
+            />
+          ))
+        ))}
+    </section>
   );
 }

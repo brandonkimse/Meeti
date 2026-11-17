@@ -215,3 +215,58 @@ export async function nearbyPlaces(center: LatLng, radiusM: number, category: Ca
   nearbyCache.set(ck, out);
   return out;
 }
+
+/* ---------- Popularity signals (OpenStreetMap via Photon, keyless) ---------- */
+
+/** Everyday venues whose density tells a lively neighbourhood from an empty hillside. */
+const BUSY_TAGS = ["amenity:restaurant", "amenity:cafe", "amenity:bar", "amenity:pub", "amenity:fast_food", "shop"];
+/** Photon returns at most this many, so a count at the cap means "very busy". */
+export const BUSY_CAP = 50;
+const busyCache = new TtlCache<number>(1000 * 60 * 60 * 24);
+const stationCache = new TtlCache<LatLng[]>(1000 * 60 * 60 * 24);
+
+/** How many venues sit within ~500 m of a point (0 = empty, BUSY_CAP = city centre). */
+export async function busyness(p: LatLng): Promise<number> {
+  const ck = `${p.lat.toFixed(3)},${p.lng.toFixed(3)}`;
+  const hit = busyCache.get(ck);
+  if (hit != null) return hit;
+  const qs = new URLSearchParams({ lat: p.lat.toFixed(5), lon: p.lng.toFixed(5), radius: "0.5", limit: String(BUSY_CAP) });
+  for (const t of BUSY_TAGS) qs.append("osm_tag", t);
+  const res = await fetchJson<PhotonResponse>(`${config.photonUrl}/reverse?${qs}`, {
+    headers: { "User-Agent": config.userAgent },
+    timeoutMs: 6000,
+  });
+  const n = res.features.length;
+  busyCache.set(ck, n);
+  return n;
+}
+
+/** Train and subway stations near a point: natural, easy-to-reach meeting hubs. */
+export async function nearbyStations(center: LatLng, radiusM: number, limit = 25): Promise<LatLng[]> {
+  const ck = `${center.lat.toFixed(3)},${center.lng.toFixed(3)}:${Math.round(radiusM / 500)}:${limit}`;
+  const hit = stationCache.get(ck);
+  if (hit) return hit;
+  const qs = new URLSearchParams({
+    lat: center.lat.toFixed(5),
+    lon: center.lng.toFixed(5),
+    radius: (Math.min(radiusM, 30000) / 1000).toFixed(2),
+    limit: String(Math.min(50, limit * 2)),
+    osm_tag: "railway:station",
+  });
+  const res = await fetchJson<PhotonResponse>(`${config.photonUrl}/reverse?${qs}`, {
+    headers: { "User-Agent": config.userAgent },
+    timeoutMs: 6000,
+  });
+  // Stations served by several lines appear once per line; keep one of each name.
+  const seen = new Set<string>();
+  const out: LatLng[] = [];
+  for (const f of res.features) {
+    const name = f.properties.name ?? `${f.geometry.coordinates}`;
+    if (seen.has(name)) continue;
+    seen.add(name);
+    out.push({ lat: f.geometry.coordinates[1], lng: f.geometry.coordinates[0] });
+    if (out.length === limit) break;
+  }
+  stationCache.set(ck, out);
+  return out;
+}

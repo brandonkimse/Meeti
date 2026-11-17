@@ -66,7 +66,7 @@ export function HangoutScreen({ id, guest = false }: { id: string; guest?: boole
         return;
       }
       if (e.type === "hangout.deleted" && e.hangoutId === id) {
-        toast("This hangout was cancelled.");
+        toast("This hangout was deleted.");
         router.replace(guest ? "/" : "/home");
         return;
       }

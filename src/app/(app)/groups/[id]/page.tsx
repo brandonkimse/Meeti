@@ -93,7 +93,7 @@ export default function GroupPage() {
           <section className="space-y-3">
             <h2 className="font-display text-lg font-bold">Upcoming</h2>
             {upcoming.length ? (
-              upcoming.map((h) => <HangoutCard key={h.id} h={h} />)
+              upcoming.map((h) => <HangoutCard key={h.id} h={h} onChanged={() => mutate()} />)
             ) : (
               <div className="card p-6 text-center">
                 <div className="text-3xl">🗓️</div>
@@ -106,7 +106,7 @@ export default function GroupPage() {
             <section className="space-y-3">
               <h2 className="font-display text-lg font-bold">Hangout history</h2>
               {history.map((h) => (
-                <HangoutCard key={h.id} h={h} />
+                <HangoutCard key={h.id} h={h} onChanged={() => mutate()} />
               ))}
             </section>
           )}

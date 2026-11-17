@@ -1,7 +1,9 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
+import { HangoutActions } from "../HangoutActions";
 import { when } from "@/lib/client/format";
 import { CATEGORIES, MODES, type HangoutDetail, type LiveShare, type TravelState } from "@/lib/types";
 
@@ -67,15 +69,28 @@ export function backLink(h: HangoutDetail): { href: string; label: string } | nu
   return { href: "/home", label: "Home" };
 }
 
-export function HangoutHeader({ h }: { h: HangoutDetail }) {
+export function HangoutHeader({ h, onChanged, actions = true }: { h: HangoutDetail; onChanged?: () => void; actions?: boolean }) {
   const back = backLink(h);
+  const router = useRouter();
   return (
     <div>
-      {back && (
-        <Link href={back.href} className="btn btn-ghost btn-sm -ml-3 text-muted">
-          <ArrowLeft className="h-4 w-4" /> {back.label}
-        </Link>
-      )}
+      <div className="flex items-center justify-between gap-2">
+        {back ? (
+          <Link href={back.href} className="btn btn-ghost btn-sm -ml-3 text-muted">
+            <ArrowLeft className="h-4 w-4" /> {back.label}
+          </Link>
+        ) : (
+          <span />
+        )}
+        {actions && !h.me.isGuest && (
+          <HangoutActions
+            h={h}
+            className="-mr-2"
+            onDone={(a) => (a === "deleted" ? router.replace(back?.href ?? "/home") : onChanged?.())}
+          />
+        )}
+      </div>
+      {h.archived && <span className="chip mt-1 !bg-soft !shadow-none">Archived</span>}
       <h1 className="font-display mt-1 text-3xl font-extrabold leading-tight">{h.title}</h1>
       <p className="mt-0.5 text-sm font-semibold text-muted">
         {when(h.startsAt)} · {modeOf(h.mode).emoji} {modeOf(h.mode).label} by default

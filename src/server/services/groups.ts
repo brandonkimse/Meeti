@@ -68,9 +68,16 @@ type HangoutRow = {
   group_id: string | null;
   group_name?: string | null;
   participant_count: number;
+  created_by: string;
+  group_owner: string | null;
 };
 
-export function toListItem(h: HangoutRow): HangoutListItem {
+/** A plan whose time has passed, or that's over: these can be archived. */
+export function isPast(h: { status: HangoutStatus; ends_at: number }): boolean {
+  return h.status === "completed" || h.status === "cancelled" || h.ends_at < Date.now();
+}
+
+export function toListItem(h: HangoutRow, userId: string, archived = false): HangoutListItem {
   return {
     id: h.id,
     title: h.title,
@@ -84,10 +91,14 @@ export function toListItem(h: HangoutRow): HangoutListItem {
     participantCount: h.participant_count,
     groupId: h.group_id,
     groupName: h.group_name ?? undefined,
+    canManage: h.created_by === userId || h.group_owner === userId,
+    canArchive: isPast(h),
+    archived,
   };
 }
 
-const HANGOUT_COLS = `h.id, h.title, h.starts_at, h.ends_at, h.status, h.mode, h.dest_name, h.dest_image_url, h.category, h.group_id,
+const HANGOUT_COLS = `h.id, h.title, h.starts_at, h.ends_at, h.status, h.mode, h.dest_name, h.dest_image_url, h.category, h.group_id, h.created_by,
+  (SELECT owner_id FROM groups go WHERE go.id = h.group_id) AS group_owner,
   (SELECT COUNT(*) FROM participants p WHERE p.hangout_id = h.id AND p.rsvp != 'declined') AS participant_count`;
 
 async function summary(g: GroupRow): Promise<GroupSummary> {
@@ -123,18 +134,20 @@ export async function listGroups(userId: string): Promise<GroupSummary[]> {
 
 const TAKES_PART = `(EXISTS (SELECT 1 FROM participants p WHERE p.hangout_id = h.id AND p.user_id = ?)
    OR EXISTS (SELECT 1 FROM memberships m WHERE m.group_id = h.group_id AND m.user_id = ?))`;
+const NOT_ARCHIVED = `NOT EXISTS (SELECT 1 FROM hangout_archives a WHERE a.hangout_id = h.id AND a.user_id = ?)`;
 
 /** Plans in progress that this person is part of: through a group or a share link. */
 export async function upcomingForUser(userId: string): Promise<HangoutListItem[]> {
   const rows = await q<HangoutRow>(
     `SELECT ${HANGOUT_COLS}, g.name AS group_name FROM hangouts h
        LEFT JOIN groups g ON g.id = h.group_id
-      WHERE h.status IN ('planning','live') AND ${TAKES_PART}
+      WHERE h.status IN ('planning','live') AND ${TAKES_PART} AND ${NOT_ARCHIVED}
       ORDER BY h.status = 'live' DESC, h.starts_at`,
     userId,
     userId,
+    userId,
   );
-  return rows.map(toListItem);
+  return rows.map((r) => toListItem(r, userId));
 }
 
 /** Recently finished plans, so group-less plans still have a history. */
@@ -142,13 +155,27 @@ export async function recentForUser(userId: string, limit = 5): Promise<HangoutL
   const rows = await q<HangoutRow>(
     `SELECT ${HANGOUT_COLS}, g.name AS group_name FROM hangouts h
        LEFT JOIN groups g ON g.id = h.group_id
-      WHERE h.status = 'completed' AND ${TAKES_PART}
+      WHERE h.status = 'completed' AND ${TAKES_PART} AND ${NOT_ARCHIVED}
       ORDER BY h.starts_at DESC LIMIT ?`,
+    userId,
     userId,
     userId,
     limit,
   );
-  return rows.map(toListItem);
+  return rows.map((r) => toListItem(r, userId));
+}
+
+/** Plans this person has archived, newest first. */
+export async function archivedForUser(userId: string, limit = 50): Promise<HangoutListItem[]> {
+  const rows = await q<HangoutRow>(
+    `SELECT ${HANGOUT_COLS}, g.name AS group_name FROM hangouts h
+       JOIN hangout_archives a ON a.hangout_id = h.id AND a.user_id = ?
+       LEFT JOIN groups g ON g.id = h.group_id
+      ORDER BY a.archived_at DESC LIMIT ?`,
+    userId,
+    limit,
+  );
+  return rows.map((r) => toListItem(r, userId, true));
 }
 
 export async function getGroup(userId: string, groupId: string): Promise<GroupDetail> {
@@ -161,13 +188,14 @@ export async function getGroup(userId: string, groupId: string): Promise<GroupDe
   const [s, hangouts] = await Promise.all([
     summary(g),
     q<HangoutRow>(
-      `SELECT ${HANGOUT_COLS} FROM hangouts h WHERE h.group_id = ?
+      `SELECT ${HANGOUT_COLS} FROM hangouts h WHERE h.group_id = ? AND ${NOT_ARCHIVED}
         ORDER BY CASE h.status WHEN 'live' THEN 0 WHEN 'planning' THEN 1 ELSE 2 END,
                  CASE WHEN h.status IN ('planning','live') THEN h.starts_at ELSE -h.starts_at END`,
       groupId,
+      userId,
     ),
   ]);
-  return { ...s, inviteCode: g.invite_code, ownerId: g.owner_id, createdAt: g.created_at, hangouts: hangouts.map(toListItem) };
+  return { ...s, inviteCode: g.invite_code, ownerId: g.owner_id, createdAt: g.created_at, hangouts: hangouts.map((h) => toListItem(h, userId)) };
 }
 
 export async function createGroup(userId: string, input: { name: string; description: string | null; imageUrl: string | null; emoji: string | null }) {

@@ -53,6 +53,10 @@ export type Recommendation = PlaceCandidate & {
   travel: TravelSummary;
   score: number;
   reason: string;
+  /** 0–1, from review counts (Google) or how lively the surroundings are (OpenStreetMap). */
+  popularity?: number;
+  /** The best-loved spot that's still a fair trip for everyone. */
+  popular?: boolean;
 };
 
 export type RecommendationSet = {
@@ -97,6 +101,12 @@ export type HangoutListItem = {
   participantCount: number;
   groupId: string | null;
   groupName?: string;
+  /** Host (or group owner): may delete it. */
+  canManage: boolean;
+  /** Over or past its time: may be archived. */
+  canArchive: boolean;
+  /** Archived by the person viewing the list. */
+  archived: boolean;
 };
 
 export type Participant = {
@@ -150,6 +160,8 @@ export type HangoutDetail = {
   category: Category | null;
   createdBy: string;
   canManage: boolean;
+  canArchive: boolean;
+  archived: boolean;
   pollClosesAt: number | null;
   finalizedAt: number | null;
   completedAt: number | null;

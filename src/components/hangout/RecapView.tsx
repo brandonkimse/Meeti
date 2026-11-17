@@ -19,7 +19,7 @@ export function RecapView({ h, mutate }: { h: HangoutDetail; mutate?: Mutate }) 
 
   return (
     <div className="mx-auto max-w-lg px-4 pb-16 pt-5 sm:px-6">
-      <HangoutHeader h={h} />
+      <HangoutHeader h={h} onChanged={() => mutate?.()} />
       <div className="card mt-5 animate-rise overflow-hidden">
         <div className="relative h-44">
           <PlaceCover imageUrl={h.destination?.imageUrl ?? null} category={h.category} seed={h.destination?.suggestionId ?? h.id} label={h.destination?.name} />

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { ChevronRight } from "lucide-react";
 import { when } from "@/lib/client/format";
 import { MODES, type HangoutListItem } from "@/lib/types";
+import { HangoutActions, type HangoutAction } from "./HangoutActions";
 import { PlaceCover } from "./PlaceCover";
 
 const STATUS: Record<HangoutListItem["status"], { label: string; cls: string }> = {
@@ -13,14 +14,12 @@ const STATUS: Record<HangoutListItem["status"], { label: string; cls: string }> 
   cancelled: { label: "Cancelled", cls: "bg-soft text-muted" },
 };
 
-export function HangoutCard({ h, showGroup = false }: { h: HangoutListItem; showGroup?: boolean }) {
+export function HangoutCard({ h, showGroup = false, onChanged }: { h: HangoutListItem; showGroup?: boolean; onChanged?: (a: HangoutAction) => void }) {
   const s = STATUS[h.status];
   const mode = MODES.find((m) => m.id === h.mode);
   return (
-    <Link
-      href={`/hangouts/${h.id}`}
-      className={`card group flex items-center gap-3.5 p-3 transition-transform hover:-translate-y-0.5 ${h.status === "live" ? "ring-2 ring-volt-deep" : ""}`}
-    >
+    <div className={`card group flex items-center gap-1 pr-2 transition-transform hover:-translate-y-0.5 ${h.status === "live" ? "ring-2 ring-volt-deep" : ""}`}>
+    <Link href={`/hangouts/${h.id}`} className="flex min-w-0 flex-1 items-center gap-3.5 p-3">
       <div className="h-16 w-16 shrink-0 overflow-hidden rounded-2xl">
         <PlaceCover category={h.category} imageUrl={h.destImageUrl} seed={h.id} compact />
       </div>
@@ -34,7 +33,9 @@ export function HangoutCard({ h, showGroup = false }: { h: HangoutListItem; show
           {when(h.startsAt)} · {mode?.emoji} {h.destName ? `· ${h.destName}` : `${h.participantCount} going`}
         </div>
       </div>
-      <ChevronRight className="h-5 w-5 shrink-0 text-faint transition-transform group-hover:translate-x-0.5" />
+      {!onChanged && <ChevronRight className="h-5 w-5 shrink-0 text-faint transition-transform group-hover:translate-x-0.5" />}
     </Link>
+    {onChanged && <HangoutActions h={h} onDone={onChanged} />}
+    </div>
   );
 }

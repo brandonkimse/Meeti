@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, ArrowRight, Check, ChevronDown, Crosshair, Info, Keyboard, Lock, Sparkles, Star, Trash2, UserPlus, X } from "lucide-react";
 import { api } from "@/lib/client/api";
@@ -13,6 +14,7 @@ import { MapView, avatarPinHtml, numberPinHtml, type MapLine, type MapMarker } f
 import { PlaceCover } from "../PlaceCover";
 import { TravelBars, TravelChips, TravelStats } from "../TravelBreakdown";
 import { Avatar, AvatarStack, Segmented, Sheet, Spinner, useToast } from "../ui";
+import { HangoutActions } from "../HangoutActions";
 import { backLink, HangoutHeader, modeOf, Stepper, type Mutate, type StepId } from "./shared";
 import { ShareSheet } from "./ShareSheet";
 
@@ -33,6 +35,7 @@ export function PlanningView({ h, mutate }: { h: HangoutDetail; mutate: Mutate }
   // Open the invite sheet straight away for a plan that was just created.
   const [shareOpen, setShareOpen] = useState(() => typeof window !== "undefined" && new URLSearchParams(window.location.search).get("invite") === "1");
   const back = backLink(h);
+  const router = useRouter();
   const panel = useRef<HTMLDivElement>(null);
   const firstTab = useRef(true);
   useEffect(() => {
@@ -135,7 +138,7 @@ export function PlanningView({ h, mutate }: { h: HangoutDetail; mutate: Mutate }
         <div className="flex items-start gap-3">
           <div className="min-w-0 flex-1">
             <div className="hidden lg:block">
-              <HangoutHeader h={h} />
+              <HangoutHeader h={h} actions={false} />
             </div>
             <div className="lg:hidden">
               <h1 className="font-display text-2xl font-extrabold leading-tight">{h.title}</h1>
@@ -148,6 +151,9 @@ export function PlanningView({ h, mutate }: { h: HangoutDetail; mutate: Mutate }
           <button className="btn btn-volt btn-sm mt-1 shrink-0" onClick={() => setShareOpen(true)}>
             <UserPlus className="h-4 w-4" /> Invite
           </button>
+          {!h.me.isGuest && (
+            <HangoutActions h={h} className="mt-0.5 -mr-2" onDone={(a) => (a === "deleted" ? router.replace(back?.href ?? "/home") : mutate())} />
+          )}
         </div>
         <div className="mt-4">
           <Stepper active={tab} onPick={(s) => s !== "live" && setTab(s)} done={{ start: !!me?.origin, places: h.suggestions.length > 0, vote: !!h.suggestions.find((s) => s.votes.includes(meId)) }} />
@@ -529,6 +535,7 @@ function RecCard({
           <span className="absolute left-1.5 top-1.5 grid h-6 w-6 place-items-center rounded-lg bg-white text-xs font-extrabold shadow">{letter}</span>
         </div>
         <div className="min-w-0 flex-1">
+          {r.popular && <span className="mb-0.5 inline-block rounded-full bg-coral px-2 py-0.5 text-[10px] font-bold text-white">⭐ Popular pick</span>}
           <div className="font-display truncate text-[17px] font-bold">{r.name}</div>
           <div className="truncate text-xs text-muted">{[r.kind, r.address].filter(Boolean).join(" · ")}</div>
           {r.rating != null && (

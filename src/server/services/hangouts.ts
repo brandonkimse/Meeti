@@ -20,7 +20,7 @@ import { publish } from "../realtime";
 import { recommend } from "../geo/recommend";
 import { travelMatrix, type Origin } from "../geo/routing";
 import { summarize } from "../geo/util";
-import { assertMember, membership, toPublicUser } from "./groups";
+import { assertMember, isPast, membership, toPublicUser } from "./groups";
 
 export type HangoutRow = {
   id: string;
@@ -173,7 +173,7 @@ export function originKey(origins: Origin[]): string {
 
 export async function getHangout(userId: string, id: string): Promise<HangoutDetail> {
   const { h, canManage } = await accessHangout(userId, id);
-  const [g, parts, votes, suggestionRows, shareRows] = await Promise.all([
+  const [g, parts, votes, suggestionRows, shareRows, archivedRow] = await Promise.all([
     h.group_id
       ? one<{ id: string; name: string; emoji: string | null; image_url: string | null }>("SELECT id, name, emoji, image_url FROM groups WHERE id = ?", h.group_id)
       : Promise.resolve(undefined),
@@ -181,6 +181,7 @@ export async function getHangout(userId: string, id: string): Promise<HangoutDet
     q<{ user_id: string; suggestion_id: string }>("SELECT user_id, suggestion_id FROM votes WHERE hangout_id = ?", h.id),
     q<SuggestionRow>("SELECT * FROM suggestions WHERE hangout_id = ? ORDER BY created_at", h.id),
     q<ShareRow>("SELECT * FROM location_shares WHERE hangout_id = ?", h.id),
+    one<{ n: number }>("SELECT 1 AS n FROM hangout_archives WHERE user_id = ? AND hangout_id = ?", userId, h.id),
   ]);
 
   const participants: Participant[] = parts.map((p) => ({
@@ -225,6 +226,8 @@ export async function getHangout(userId: string, id: string): Promise<HangoutDet
     category: h.category,
     createdBy: h.created_by,
     canManage,
+    canArchive: isPast(h),
+    archived: !!archivedRow,
     pollClosesAt: h.poll_closes_at,
     finalizedAt: h.finalized_at,
     completedAt: h.completed_at,
@@ -533,10 +536,21 @@ export async function complete(userId: string, id: string) {
 
 export async function cancelHangout(userId: string, id: string) {
   const { h, canManage } = await accessHangout(userId, id);
-  if (!canManage) throw new HttpError(403, "Only the host can cancel this hangout.");
+  if (!canManage) throw new HttpError(403, "Only the host can delete this hangout.");
   await run("DELETE FROM hangouts WHERE id = ?", id);
   await changed(id, "hangout.deleted");
   await groupChanged(h);
+}
+
+/** Hide (or bring back) an old hangout in this person's own lists. */
+export async function setArchived(userId: string, id: string, archived: boolean) {
+  const { h } = await accessHangout(userId, id);
+  if (archived) {
+    if (!isPast(h)) throw new HttpError(409, "Only past hangouts can be archived. The host can delete one that's still planned.");
+    await run("INSERT INTO hangout_archives (user_id, hangout_id) VALUES (?, ?) ON CONFLICT DO NOTHING", userId, id);
+  } else {
+    await run("DELETE FROM hangout_archives WHERE user_id = ? AND hangout_id = ?", userId, id);
+  }
 }
 
 export async function updateHangout(userId: string, id: string, patch: { title?: string; startsAt?: number; mode?: Mode }) {
