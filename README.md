@@ -9,6 +9,9 @@ Meeti runs on [Supabase](https://supabase.com): Postgres, Auth and Realtime.
 1. **Create a Supabase project.**
 2. **Create the schema:** open the SQL editor and run [`supabase/migrations/20261116000000_meeti_init.sql`](supabase/migrations/20261116000000_meeti_init.sql). If you use the Supabase CLI, `supabase db push` does the same.
 3. **Set the auth redirect URLs:** under Authentication → URL Configuration, set the Site URL to your app's URL, and add `http://localhost:3000/auth/callback` plus `https://YOUR-DOMAIN/auth/callback` to the redirect URLs.
+   - Recommended: under Authentication → Email Templates → **Confirm signup**, change the link to
+     `{{ .SiteURL }}/auth/callback?token_hash={{ .TokenHash }}&type=email`.
+     That link works in any browser or device. The default link only works in the browser that signed up.
 4. **Configure env vars:** copy `.env.example` to `.env.local` and fill in the four Supabase values.
 5. **Run it:**
 

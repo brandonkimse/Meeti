@@ -75,7 +75,7 @@ export function AuthForm({ mode, demoMode }: { mode: "login" | "signup"; demoMod
         <p className="mt-3 text-muted">{mode === "signup" ? "Create your account. It takes about ten seconds." : "Log in to see what your crew is up to."}</p>
 
         {linkError && (
-          <p className="mt-6 rounded-xl bg-danger/10 px-3 py-2 text-sm font-semibold text-danger">That link has expired or was already used. Log in, or sign up again.</p>
+          <p className="mt-6 rounded-xl bg-danger/10 px-3 py-2 text-sm font-semibold text-danger">That link didn&apos;t sign you in. If you&apos;ve clicked it before, your email is probably already confirmed, so try logging in. Email links also need to be opened in the same browser you signed up in.</p>
         )}
 
         {sentTo ? (

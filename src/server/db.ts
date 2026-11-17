@@ -103,12 +103,29 @@ async function exec<T>(query: string, params: Param[]): Promise<T[]> {
   try {
     return (await withTimeout(client.unsafe(text, args), QUERY_TIMEOUT_MS, `query "${label}"`)) as unknown as T[];
   } catch (e) {
-    if (!(e instanceof DbTimeoutError)) throw e;
-    console.warn(`[meeti] ${e.message}; resetting connections`);
-    resetPool(client);
-    if (!isRetryableRead(query)) throw e;
+    let retry: boolean;
+    if (e instanceof DbTimeoutError) {
+      console.warn(`[meeti] ${e.message}; resetting connections`);
+      resetPool(client);
+      retry = isRetryableRead(query);
+    } else if (isDroppedConnection(e)) {
+      // The connection died under this query (e.g. another request reset the pool).
+      // Reads are always safe to repeat; writes only if they never reached the server.
+      resetPool(client);
+      retry = isRetryableRead(query) || neverSent(e);
+    } else throw e;
+    if (!retry) throw e;
     return (await withTimeout(sql().unsafe(text, args), QUERY_TIMEOUT_MS, `query "${label}" (retry)`)) as unknown as T[];
   }
+}
+
+const DROPPED = new Set(["CONNECTION_DESTROYED", "CONNECTION_CLOSED", "CONNECTION_ENDED", "ECONNRESET", "EPIPE"]);
+function isDroppedConnection(e: unknown): boolean {
+  return DROPPED.has((e as { code?: string })?.code ?? "");
+}
+/** postgres.js reports "write CONNECTION_…" when the query couldn't be sent at all. */
+function neverSent(e: unknown): boolean {
+  return /^write /.test((e as Error)?.message ?? "");
 }
 
 export async function q<T = Row>(query: string, ...params: Param[]): Promise<T[]> {
