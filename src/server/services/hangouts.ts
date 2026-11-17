@@ -350,7 +350,26 @@ async function travelFor(h: HangoutRow, places: { lat: number; lng: number }[]):
 }
 
 /** Recompute per-member travel times for every suggestion whose inputs changed. Idempotent. */
-export async function refreshTravel(id: string) {
+/** Plans with a travel refresh running in this instance -> whether another was requested meanwhile. */
+const refreshing = new Map<string, boolean>();
+
+export async function refreshTravel(id: string): Promise<void> {
+  // Collapse bursts (e.g. several starting points saved at once) into one run plus one follow-up.
+  if (refreshing.has(id)) {
+    refreshing.set(id, true);
+    return;
+  }
+  refreshing.set(id, false);
+  try {
+    await refreshTravelOnce(id);
+  } finally {
+    const again = refreshing.get(id);
+    refreshing.delete(id);
+    if (again) await refreshTravel(id);
+  }
+}
+
+async function refreshTravelOnce(id: string) {
   const h = await one<HangoutRow>("SELECT * FROM hangouts WHERE id = ?", id);
   if (!h) return;
   const key = originKey(await originsFor(h));

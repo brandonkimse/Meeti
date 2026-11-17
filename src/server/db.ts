@@ -27,10 +27,36 @@ export class DbTimeoutError extends Error {
   name = "DbTimeoutError";
 }
 
+const POOL_MAX = Number(process.env.DATABASE_POOL_MAX || 5);
+
+/**
+ * At most POOL_MAX queries in flight per server instance. postgres.js would
+ * otherwise pipeline extra queries onto busy connections, and Supabase's
+ * transaction pooler can leave pipelined queries unanswered under bursts.
+ */
+let active = 0;
+const waiting: (() => void)[] = [];
+async function acquire() {
+  while (active >= POOL_MAX) await new Promise<void>((r) => waiting.push(r));
+  active++;
+}
+function release() {
+  active--;
+  waiting.shift()?.();
+}
+async function limited<T>(fn: () => Promise<T>): Promise<T> {
+  await acquire();
+  try {
+    return await fn();
+  } finally {
+    release();
+  }
+}
+
 function connect(url: string): Sql {
   return postgres(url, {
     prepare: false,
-    max: Number(process.env.DATABASE_POOL_MAX || 5),
+    max: POOL_MAX,
     // Short-lived connections suit serverless: fewer chances to reuse a dropped one.
     idle_timeout: 10,
     max_lifetime: 60 * 5,
@@ -99,6 +125,10 @@ async function exec<T>(query: string, params: Param[]): Promise<T[]> {
   // Inside a transaction, the transaction's own time limit applies.
   if (t) return t.unsafe(text, args) as unknown as Promise<T[]>;
 
+  return limited(() => execOutsideTx<T>(query, text, args, label));
+}
+
+async function execOutsideTx<T>(query: string, text: string, args: postgres.ParameterOrJSON<never>[], label: string): Promise<T[]> {
   const client = sql();
   try {
     return (await withTimeout(client.unsafe(text, args), QUERY_TIMEOUT_MS, `query "${label}"`)) as unknown as T[];
@@ -145,10 +175,13 @@ export async function tx<T>(fn: () => Promise<T>): Promise<T> {
   if (txStore.getStore()) return fn();
   const client = sql();
   try {
-    return (await withTimeout(
-      client.begin((t) => txStore.run(t, fn)),
-      TX_TIMEOUT_MS,
-      "transaction",
+    // A transaction holds one connection for its whole duration.
+    return (await limited(() =>
+      withTimeout(
+        client.begin((t) => txStore.run(t, fn)),
+        TX_TIMEOUT_MS,
+        "transaction",
+      ),
     )) as T;
   } catch (e) {
     if (e instanceof DbTimeoutError) {

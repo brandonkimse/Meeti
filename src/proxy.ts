@@ -23,11 +23,13 @@ export async function proxy(req: NextRequest) {
       },
     },
   });
+  // Verifies the login token locally (and refreshes it when it's about to expire).
   // If Supabase is unreachable, carry on; the page itself checks the session again.
-  const { data } = await supabase.auth.getUser().catch(() => ({ data: { user: null } }));
+  const { data } = await supabase.auth.getClaims().catch(() => ({ data: null }));
+  const signedIn = !!data?.claims?.sub;
 
   const { pathname, search } = req.nextUrl;
-  if (!data.user && APP_PREFIXES.some((p) => pathname === p || pathname.startsWith(p + "/"))) {
+  if (!signedIn && APP_PREFIXES.some((p) => pathname === p || pathname.startsWith(p + "/"))) {
     const url = req.nextUrl.clone();
     url.pathname = "/login";
     url.search = `?next=${encodeURIComponent(pathname + search)}`;

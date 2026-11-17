@@ -1,6 +1,7 @@
 import "server-only";
 import { createHash, randomBytes } from "node:crypto";
 import { cookies } from "next/headers";
+import { cache } from "react";
 import { now, one, q, run, tx } from "./db";
 import { supabaseServer } from "./supabase";
 
@@ -33,21 +34,28 @@ export const GUEST_COOKIE = "meeti_guest";
 const GUEST_TTL_S = 60 * 60 * 24 * 90;
 const hashToken = (t: string) => createHash("sha256").update(t).digest("hex");
 
-/** The signed-in user (never a guest). */
-export async function getCurrentUser(): Promise<User | null> {
+/**
+ * The signed-in user (never a guest). The login token is verified locally
+ * against the project's public signing key (getClaims), so this doesn't call
+ * Supabase Auth on every request. Cached for the duration of one request.
+ */
+export const getCurrentUser = cache(async (): Promise<User | null> => {
   const supabase = await supabaseServer();
-  const { data } = await supabase.auth.getUser();
-  const authUser = data.user;
-  if (!authUser) return null;
-  let profile = await one<User>(`SELECT ${PROFILE_COLS} FROM profiles WHERE id = ?`, authUser.id);
+  const { data } = await supabase.auth.getClaims().catch(() => ({ data: null }));
+  const claims = data?.claims;
+  if (!claims?.sub) return null;
+  const id = claims.sub;
+  let profile = await one<User>(`SELECT ${PROFILE_COLS} FROM profiles WHERE id = ?`, id);
   if (!profile) {
     // The signup trigger normally creates this; recover if it didn't run.
-    const name = (authUser.user_metadata?.name as string | undefined)?.trim() || authUser.email?.split("@")[0] || "Friend";
-    await run("INSERT INTO profiles (id, email, name) VALUES (?, ?, ?) ON CONFLICT (id) DO NOTHING", authUser.id, authUser.email ?? null, name);
-    profile = await one<User>(`SELECT ${PROFILE_COLS} FROM profiles WHERE id = ?`, authUser.id);
+    const email = typeof claims.email === "string" ? claims.email : null;
+    const meta = (claims.user_metadata ?? {}) as { name?: string };
+    const name = meta.name?.trim() || email?.split("@")[0] || "Friend";
+    await run("INSERT INTO profiles (id, email, name) VALUES (?, ?, ?) ON CONFLICT (id) DO NOTHING", id, email, name);
+    profile = await one<User>(`SELECT ${PROFILE_COLS} FROM profiles WHERE id = ?`, id);
   }
   return profile ?? null;
-}
+});
 
 export async function requireUser(): Promise<User> {
   const u = await getCurrentUser();
