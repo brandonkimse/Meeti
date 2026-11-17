@@ -80,7 +80,6 @@ export default async function Landing() {
 
       <main className="mx-auto grid max-w-6xl grid-cols-1 items-center gap-12 px-5 pb-16 pt-6 md:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)] md:pt-14">
         <div className="animate-rise">
-          <span className="chip mb-5 !bg-volt !shadow-none">📍 Meet in the middle, fairly</span>
           <h1 className="font-display text-[3.1rem] font-extrabold leading-[0.98] sm:text-7xl">
             “Where should
             <br />
@@ -101,19 +100,6 @@ export default async function Landing() {
               Start planning. It&apos;s free
             </Link>
             {config.demoMode && <DemoButton />}
-          </div>
-          <div className="mt-10 grid max-w-lg grid-cols-3 gap-3">
-            {[
-              ["⚖️", "Fair spots", "Real travel times for every friend"],
-              ["🗳️", "Group vote", "Live results, change anytime"],
-              ["🛰️", "Live arrival", "See friends get closer"],
-            ].map(([e, t, d]) => (
-              <div key={t} className="card p-3.5">
-                <div className="text-xl">{e}</div>
-                <div className="mt-1 text-sm font-bold">{t}</div>
-                <div className="text-xs text-muted">{d}</div>
-              </div>
-            ))}
           </div>
         </div>
         <div className="flex justify-center md:justify-end">
