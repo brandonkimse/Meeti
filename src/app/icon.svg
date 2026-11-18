@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 28 28">
+  <!-- The Meeti mark: two paths meeting at one point (same as the logo in src/components/ui.tsx),
+       drawn a little larger than in the logo so it stays legible at 16px. -->
+  <rect width="28" height="28" rx="9" fill="#d4ff3f"/>
+  <g transform="translate(0.2 1.1) scale(1.15)" fill="none" stroke="#17141f" stroke-width="2.6" stroke-linecap="round">
+    <path d="M4 18 C 7 12, 9 12, 12 12 C 15 12, 17 12, 20 18"/>
+    <circle cx="12" cy="7" r="2.6" fill="#17141f" stroke="none"/>
+  </g>
+</svg>
