@@ -2,9 +2,10 @@
 
 import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
-import { Camera, LogOut, ShieldCheck } from "lucide-react";
+import Link from "next/link";
+import { Camera, LogOut, ShieldCheck, Trash2 } from "lucide-react";
 import { useMe } from "@/components/AppShell";
-import { Avatar, Spinner, useToast } from "@/components/ui";
+import { Avatar, Sheet, Spinner, useToast } from "@/components/ui";
 import { api } from "@/lib/client/api";
 import { fileToDataUrl } from "@/lib/client/image";
 
@@ -16,6 +17,21 @@ export default function Profile() {
   const [avatar, setAvatar] = useState(me.avatarUrl);
   const [busy, setBusy] = useState(false);
   const file = useRef<HTMLInputElement>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [confirmText, setConfirmText] = useState("");
+  const [deleteBusy, setDeleteBusy] = useState(false);
+
+  async function deleteAccount() {
+    setDeleteBusy(true);
+    try {
+      await api("/api/me", { method: "DELETE", body: { confirm: confirmText.trim().toUpperCase() } });
+      router.replace("/");
+      router.refresh();
+    } catch (e) {
+      toast((e as Error).message, "error");
+      setDeleteBusy(false);
+    }
+  }
 
   async function save(patch: { name?: string; avatarUrl?: string | null }) {
     setBusy(true);
@@ -109,6 +125,45 @@ export default function Profile() {
       >
         <LogOut className="h-4 w-4" /> Log out
       </button>
+
+      <div className="text-center">
+        <button className="btn btn-ghost btn-sm text-danger" onClick={() => setDeleting(true)}>
+          <Trash2 className="h-4 w-4" /> Delete my account
+        </button>
+        <p className="mt-2 text-xs text-faint">
+          <Link href="/privacy" className="hover:text-ink">
+            Privacy
+          </Link>{" "}
+          ·{" "}
+          <Link href="/terms" className="hover:text-ink">
+            Terms
+          </Link>
+        </p>
+      </div>
+
+      <Sheet
+        open={deleting}
+        onClose={() => {
+          setDeleting(false);
+          setConfirmText("");
+        }}
+        title="Delete your account?"
+      >
+        <div className="space-y-3 text-sm">
+          <p className="text-muted">This permanently deletes your account, profile, starting points, votes and location history. It can&apos;t be undone.</p>
+          <ul className="list-disc space-y-1 pl-5 text-muted">
+            <li>Groups you own pass to the longest-standing member.</li>
+            <li>Plans you host pass to someone else in them, so your friends keep their plans. Plans with nobody else are deleted.</li>
+          </ul>
+          <label className="label !mt-4" htmlFor="confirm-delete">
+            Type DELETE to confirm
+          </label>
+          <input id="confirm-delete" className="input" value={confirmText} onChange={(e) => setConfirmText(e.target.value)} autoComplete="off" placeholder="DELETE" />
+          <button className="btn btn-lg w-full bg-danger text-white" disabled={deleteBusy || confirmText.trim().toUpperCase() !== "DELETE"} onClick={deleteAccount}>
+            {deleteBusy ? <Spinner className="h-4 w-4" /> : "Delete my account forever"}
+          </button>
+        </div>
+      </Sheet>
     </div>
   );
 }

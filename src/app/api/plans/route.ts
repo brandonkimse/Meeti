@@ -2,10 +2,12 @@ import { CATEGORIES, MODES } from "@/lib/types";
 import { requireUser } from "@/server/auth";
 import { handle, num, oneOf, readBody, str } from "@/server/http";
 import { createHangout } from "@/server/services/hangouts";
+import { rateLimit } from "@/server/ratelimit";
 
 /** Create a plan on its own (no group), to share with a link. */
 export const POST = handle(async (req) => {
   const u = await requireUser();
+  await rateLimit("createPlan", u.id, "You've made a lot of plans today. Please try again tomorrow.");
   const b = await readBody(req);
   const id = await createHangout(u.id, null, {
     title: str(b.title, "Title", { min: 1, max: 60 }),

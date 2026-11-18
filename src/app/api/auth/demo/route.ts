@@ -2,11 +2,13 @@ import { HttpError } from "@/server/auth";
 import { config } from "@/server/config";
 import { handle } from "@/server/http";
 import { createDemoWorld } from "@/server/services/demo";
+import { clientIp, rateLimit } from "@/server/ratelimit";
 
 export const maxDuration = 60;
 
-export const POST = handle(async () => {
+export const POST = handle(async (req) => {
   if (!config.demoMode) throw new HttpError(404, "Demo mode is off. Set MEETI_DEMO_MODE=true to enable it.");
+  await rateLimit("demoIp", clientIp(req));
   try {
     await createDemoWorld();
   } catch (e) {

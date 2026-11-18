@@ -4,6 +4,7 @@ import { getCurrentUser } from "@/server/auth";
 import { config } from "@/server/config";
 import { Logo } from "@/components/ui";
 import { DemoButton } from "@/components/DemoButton";
+import { LegalLinks } from "@/components/LegalLinks";
 
 const FRIENDS = [
   { x: 14, y: 22, c: "#ff7a59", i: "MP", t: "14 min" },
@@ -118,6 +119,9 @@ export default async function Landing() {
           </div>
         </div>
       </section>
+      <footer className="pb-10">
+        <LegalLinks />
+      </footer>
     </div>
   );
 }

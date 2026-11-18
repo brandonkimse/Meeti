@@ -7,11 +7,11 @@
 Meeti runs on [Supabase](https://supabase.com): Postgres, Auth and Realtime.
 
 1. **Create a Supabase project.**
-2. **Create the schema:** open the SQL editor and run [`supabase/migrations/20261116000000_meeti_init.sql`](supabase/migrations/20261116000000_meeti_init.sql). If you use the Supabase CLI, `supabase db push` does the same.
-3. **Set the auth redirect URLs:** under Authentication → URL Configuration, set the Site URL to your app's URL, and add `http://localhost:3000/auth/callback` plus `https://YOUR-DOMAIN/auth/callback` to the redirect URLs.
-   - Recommended: under Authentication → Email Templates → **Confirm signup**, change the link to
-     `{{ .SiteURL }}/auth/callback?token_hash={{ .TokenHash }}&type=email`.
-     That link works in any browser or device. The default link only works in the browser that signed up.
+2. **Create the schema:** open the SQL editor and run every file in [`supabase/migrations`](supabase/migrations), oldest first. If you use the Supabase CLI, `supabase db push` does the same.
+3. **Set the auth redirect URLs:** under Authentication → URL Configuration, set the Site URL to your app's URL, and add `http://localhost:3000/**` plus `https://YOUR-DOMAIN/**` to the redirect URLs.
+   - Recommended: under Authentication → Email Templates, change the links so they work in any browser or device (the default links only work in the browser that asked for them):
+     - **Confirm signup:** `{{ .SiteURL }}/auth/callback?token_hash={{ .TokenHash }}&type=email`
+     - **Reset password:** `{{ .SiteURL }}/auth/callback?token_hash={{ .TokenHash }}&type=recovery&next=/reset-password`
 4. **Configure env vars:** copy `.env.example` to `.env.local` and fill in the four Supabase values.
 5. **Run it:**
 
@@ -91,6 +91,20 @@ supabase/migrations/      # schema, RLS, realtime authorization
   - Live location needs explicit consent per hangout. The consent screen shows exactly who can see it and until when.
   - Coordinates are only served while sharing is active. Stopping deletes them.
   - Sharing expires at the hangout's end time, and completing a hangout wipes everyone's coordinates.
+
+## Going live
+
+Before inviting the public:
+
+1. **Send email from your own domain.** Supabase's built-in email only sends a few messages an hour, and only to your Supabase team's addresses, so password resets won't reach real users without this. With [Resend](https://resend.com) (free for 3,000 emails a month):
+   1. Add and verify your domain in Resend (it gives you DNS records to add), then create an API key.
+   2. In Supabase → Authentication → Emails → **SMTP Settings**, turn on custom SMTP: host `smtp.resend.com`, port `465`, username `resend`, password = the API key, sender e.g. `Meeti <hello@your-domain.com>`.
+   3. In Supabase → Authentication → **Rate Limits**, raise the email limit (for example to 100 an hour).
+2. **Fill in the legal details** shown on `/privacy` and `/terms`: set `MEETI_OPERATOR_NAME` (your name or business) and `MEETI_CONTACT_EMAIL`. The texts are a plain-language starting point; have them reviewed before launch, and add a Korean version for Korean users.
+3. **Set `SUPABASE_SERVICE_ROLE_KEY` on Vercel.** Account deletion needs it to remove the login.
+4. **Turn demo mode off** in production (leave `MEETI_DEMO_MODE` unset), so nobody can create demo accounts in bulk.
+
+Built in: password reset (`/forgot-password`), account deletion (Profile → Delete my account), sign-up consent to the terms, and rate limits on sign-up, login, guest joins, plan creation, recommendations and search (see `src/server/ratelimit.ts`). Rate-limited requests get a friendly "please wait" message.
 
 ## External services & what needs configuration
 

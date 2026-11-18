@@ -1,9 +1,11 @@
-import { requireUser } from "@/server/auth";
+import { requireActor } from "@/server/auth";
 import { handle } from "@/server/http";
 import { searchPlaces } from "@/server/geo/places";
+import { rateLimit } from "@/server/ratelimit";
 
 export const GET = handle(async (req) => {
-  await requireUser();
+  const actor = await requireActor();
+  await rateLimit("searchUser", actor.id);
   const u = new URL(req.url);
   const query = (u.searchParams.get("q") ?? "").trim().slice(0, 120);
   if (query.length < 2) return { results: [] };

@@ -30,6 +30,12 @@ export const config = {
    * place data comes from OpenStreetMap.
    */
   googleMapsKey: process.env.GOOGLE_MAPS_API_KEY || "",
+
+  /** Shown in the privacy policy and terms: who runs Meeti and how to reach them. */
+  legal: {
+    operator: process.env.MEETI_OPERATOR_NAME || "",
+    email: process.env.MEETI_CONTACT_EMAIL || "",
+  },
 };
 
 export type ProviderStatus = {

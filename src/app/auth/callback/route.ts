@@ -4,7 +4,7 @@ import { claimGuest } from "@/server/auth";
 import { supabaseServer } from "@/server/supabase";
 
 /**
- * Landing point for Supabase email links (sign-up confirmation). Handles both:
+ * Landing point for Supabase email links (sign-up confirmation, password reset). Handles both:
  * - `?token_hash=…&type=…`: works in any browser or device (recommended
  *   email template, see README).
  * - `?code=…`: the default PKCE link; only works in the browser that signed up.
@@ -28,5 +28,7 @@ export async function GET(req: Request) {
       return NextResponse.redirect(new URL(next, url.origin));
     }
   }
-  return NextResponse.redirect(new URL("/login?error=link", url.origin));
+  // A failed password-reset link goes back to the reset page, which explains what happened.
+  const failed = next === "/reset-password" || type === "recovery" ? "/forgot-password?error=link" : "/login?error=link";
+  return NextResponse.redirect(new URL(failed, url.origin));
 }

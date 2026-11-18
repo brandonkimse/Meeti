@@ -2,9 +2,11 @@ import { CATEGORIES, MODES } from "@/lib/types";
 import { requireUser } from "@/server/auth";
 import { handle, num, oneOf, readBody, str } from "@/server/http";
 import { createHangout } from "@/server/services/hangouts";
+import { rateLimit } from "@/server/ratelimit";
 
 export const POST = handle<{ params: Promise<{ id: string }> }>(async (req, { params }) => {
   const u = await requireUser();
+  await rateLimit("createPlan", u.id, "You've made a lot of plans today. Please try again tomorrow.");
   const b = await readBody(req);
   const id = await createHangout(u.id, (await params).id, {
     title: str(b.title, "Title", { min: 1, max: 60 }),

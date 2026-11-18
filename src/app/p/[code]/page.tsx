@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import useSWR from "swr";
 import { HangoutScreen } from "@/components/hangout/HangoutScreen";
 import { PlaceCover } from "@/components/PlaceCover";
+import { LegalLinks } from "@/components/LegalLinks";
 import { AvatarStack, Logo, PageLoader, Spinner } from "@/components/ui";
 import { api, fetcher } from "@/lib/client/api";
 import { when } from "@/lib/client/format";
@@ -148,6 +149,17 @@ export default function JoinPlan() {
                 {busy ? <Spinner /> : "Join the plan"}
               </button>
               <p className="text-center text-xs text-muted">No account needed. You&apos;ll add where you&apos;re coming from next.</p>
+              <p className="text-center text-[11px] text-faint">
+                By joining you agree to the{" "}
+                <Link href="/terms" target="_blank" className="underline underline-offset-2">
+                  Terms
+                </Link>{" "}
+                and{" "}
+                <Link href="/privacy" target="_blank" className="underline underline-offset-2">
+                  Privacy policy
+                </Link>
+                .
+              </p>
             </form>
           )}
           {joinError && <p className="mt-3 rounded-xl bg-danger/10 px-3 py-2 text-sm font-semibold text-danger">{joinError}</p>}
@@ -172,6 +184,7 @@ function Shell({ children }: { children: React.ReactNode }) {
         <Logo />
       </Link>
       <div className="flex flex-1 items-center py-8">{children}</div>
+      <LegalLinks />
     </div>
   );
 }

@@ -178,7 +178,12 @@ export async function tx<T>(fn: () => Promise<T>): Promise<T> {
     // A transaction holds one connection for its whole duration.
     return (await limited(() =>
       withTimeout(
-        client.begin((t) => txStore.run(t, fn)),
+        client.begin(async (t) => {
+          // If this server dies or loses its connection mid-transaction, Postgres
+          // rolls it back after 20 s instead of holding its row locks indefinitely.
+          await t`SET LOCAL idle_in_transaction_session_timeout = '20s'`;
+          return txStore.run(t, fn);
+        }),
         TX_TIMEOUT_MS,
         "transaction",
       ),

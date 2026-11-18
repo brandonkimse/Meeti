@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
 import { api } from "@/lib/client/api";
+import { LegalLinks } from "./LegalLinks";
 import { Logo, Spinner } from "./ui";
 
 export function AuthForm({ mode, demoMode }: { mode: "login" | "signup"; demoMode: boolean }) {
@@ -14,6 +15,7 @@ export function AuthForm({ mode, demoMode }: { mode: "login" | "signup"; demoMod
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [agreed, setAgreed] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<"form" | "demo" | null>(null);
   const [sentTo, setSentTo] = useState<string | null>(null);
@@ -25,7 +27,7 @@ export function AuthForm({ mode, demoMode }: { mode: "login" | "signup"; demoMod
     setBusy("form");
     try {
       const r = await api<{ needsConfirmation?: boolean }>(`/api/auth/${mode}`, {
-        body: mode === "signup" ? { name, email, password, next: safeNext } : { email, password },
+        body: mode === "signup" ? { name, email, password, agreed, next: safeNext } : { email, password },
       });
       if (r.needsConfirmation) {
         setSentTo(email);
@@ -103,9 +105,16 @@ export function AuthForm({ mode, demoMode }: { mode: "login" | "signup"; demoMod
             <input id="email" type="email" className="input" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" autoComplete="email" required />
           </div>
           <div>
-            <label className="label" htmlFor="password">
-              Password
-            </label>
+            <div className="flex items-baseline justify-between">
+              <label className="label" htmlFor="password">
+                Password
+              </label>
+              {mode === "login" && (
+                <Link href={`/forgot-password${email ? `?email=${encodeURIComponent(email)}` : ""}`} className="text-xs font-semibold text-muted underline-offset-4 hover:text-ink hover:underline">
+                  Forgot password?
+                </Link>
+              )}
+            </div>
             <input
               id="password"
               type="password"
@@ -118,8 +127,24 @@ export function AuthForm({ mode, demoMode }: { mode: "login" | "signup"; demoMod
               required
             />
           </div>
+          {mode === "signup" && (
+            <label className="flex items-start gap-2.5 text-sm text-muted">
+              <input type="checkbox" className="mt-0.5 h-4 w-4 shrink-0 accent-ink" checked={agreed} onChange={(e) => setAgreed(e.target.checked)} required />
+              <span>
+                I&apos;m 14 or older and agree to the{" "}
+                <Link href="/terms" target="_blank" className="font-semibold text-ink underline underline-offset-2">
+                  Terms
+                </Link>{" "}
+                and{" "}
+                <Link href="/privacy" target="_blank" className="font-semibold text-ink underline underline-offset-2">
+                  Privacy policy
+                </Link>
+                , including how Meeti uses location.
+              </span>
+            </label>
+          )}
           {error && <p className="rounded-xl bg-danger/10 px-3 py-2 text-sm font-semibold text-danger">{error}</p>}
-          <button className="btn btn-ink btn-lg w-full" disabled={!!busy}>
+          <button className="btn btn-ink btn-lg w-full" disabled={!!busy || (mode === "signup" && !agreed)}>
             {busy === "form" ? <Spinner /> : mode === "signup" ? "Create account" : "Log in"}
           </button>
         </form>
@@ -137,6 +162,7 @@ export function AuthForm({ mode, demoMode }: { mode: "login" | "signup"; demoMod
             {mode === "signup" ? "Log in" : "Create one"}
           </Link>
         </p>
+        <LegalLinks />
       </div>
     </div>
   );

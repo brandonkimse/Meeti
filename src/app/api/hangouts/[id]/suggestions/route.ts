@@ -3,9 +3,11 @@ import { requireActor } from "@/server/auth";
 import { handle, imageDataUrl, lat, lng, num, oneOf, readBody, str } from "@/server/http";
 import { demoReact } from "@/server/services/demo";
 import { addSuggestion } from "@/server/services/hangouts";
+import { rateLimit } from "@/server/ratelimit";
 
 export const POST = handle<{ params: Promise<{ id: string }> }>(async (req, { params }) => {
   const u = await requireActor();
+  await rateLimit("suggestUser", u.id);
   const id = (await params).id;
   const b = await readBody(req);
   const place: PlaceCandidate = {
