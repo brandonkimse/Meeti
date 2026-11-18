@@ -36,7 +36,7 @@ export default function Privacy() {
           <tr>
             <td>Guest name, and a random code saved in your browser</td>
             <td>To let you join a plan from a link without an account</td>
-            <td>Until the plan is deleted, or you ask us to delete it</td>
+            <td>Until you&apos;re no longer in any plan (we remove guest details within a day after that), or until you ask us to delete them</td>
           </tr>
           <tr>
             <td>Groups, plans, votes and places you add</td>
@@ -46,7 +46,7 @@ export default function Privacy() {
           <tr>
             <td>Starting point for a plan (typed address or GPS)</td>
             <td>To work out everyone&apos;s travel time and recommend a fair spot. Only people in that plan can see it.</td>
-            <td>With the plan. You can change or clear it at any time.</td>
+            <td>Deleted when the hangout ends, or a day after its planned time if a spot was never chosen. You can change or clear it while the plan is being made.</td>
           </tr>
           <tr>
             <td>Live location, only if you turn it on for a hangout: position, accuracy and arrival estimate</td>
@@ -71,13 +71,14 @@ export default function Privacy() {
       <ul>
         <li>Live location is always off until you turn it on for one specific hangout. You can pause or stop it at any time, and it switches itself off when the hangout ends.</li>
         <li>You never have to use GPS: you can type an address or a nearby landmark instead.</li>
-        <li>Your starting point and live position are visible only to the people in that plan.</li>
+        <li>Your starting point and live position are visible only to the people in that plan, which includes anyone who joins with the plan&apos;s link.</li>
       </ul>
 
       <h2>4. Services that process data for us</h2>
       <p>
         We use the providers below to run Meeti. Some are outside Korea, so your information may be transferred abroad (국외 이전) when you use the service, over encrypted
-        connections. To calculate routes and find places, we send map services coordinates and place names only, never your name or email.
+        connections. To calculate routes and find places, we send map services coordinates and place names only, never your name or email. Each provider&apos;s
+        privacy policy (linked below) explains how long it keeps data and how to contact it.
       </p>
       <table>
         <thead>
@@ -85,38 +86,48 @@ export default function Privacy() {
             <th>Provider</th>
             <th>Country</th>
             <th>What it does</th>
+            <th>What it receives</th>
           </tr>
         </thead>
         <tbody>
           <tr>
-            <td>Supabase</td>
+            <td><a href="https://supabase.com/privacy">Supabase</a></td>
             <td>Data stored in Seoul, Korea (company in the USA)</td>
             <td>Database, sign-in, and live updates</td>
+            <td>Everything in section 2 that Meeti stores</td>
           </tr>
           <tr>
-            <td>Vercel</td>
+            <td><a href="https://vercel.com/legal/privacy-policy">Vercel</a></td>
             <td>Servers run in Seoul, Korea (company in the USA)</td>
             <td>Hosting, logs and anonymous page-view statistics</td>
+            <td>Requests to Meeti, including IP address</td>
           </tr>
           <tr>
             <td>Our email provider</td>
             <td>USA</td>
             <td>Sending sign-up and password-reset emails</td>
+            <td>Your email address and the email&apos;s contents</td>
           </tr>
           <tr>
-            <td>OpenStreetMap services: OSRM (FOSSGIS e.V.), Photon (komoot), Nominatim (OpenStreetMap Foundation)</td>
+            <td>
+              OpenStreetMap services: OSRM (<a href="https://www.fossgis.de/datenschutzerkl%C3%A4rung">FOSSGIS e.V.</a>), Photon (<a href="https://www.komoot.com/privacy">komoot</a>),
+              Nominatim (<a href="https://osmfoundation.org/wiki/Privacy_Policy">OpenStreetMap Foundation</a>)
+            </td>
             <td>Germany, UK</td>
             <td>Travel times, place search and address lookup</td>
+            <td>Coordinates and search text, sent from our servers</td>
           </tr>
           <tr>
-            <td>MapTiler</td>
+            <td><a href="https://www.maptiler.com/privacy-policy/">MapTiler</a></td>
             <td>Switzerland</td>
             <td>Map images loaded by your browser for the area you&apos;re viewing</td>
+            <td>Your IP address and the map area you&apos;re viewing</td>
           </tr>
           <tr>
-            <td>Google Maps Platform, if enabled</td>
+            <td><a href="https://policies.google.com/privacy">Google Maps Platform</a>, if enabled</td>
             <td>USA</td>
             <td>Transit times, place details and photos</td>
+            <td>Coordinates and search text, sent from our servers</td>
           </tr>
         </tbody>
       </table>

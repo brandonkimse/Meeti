@@ -6,7 +6,7 @@ import { ArrowLeft, Eye, Maximize2, Navigation, Pause, Play, ShieldCheck, Square
 import { api } from "@/lib/client/api";
 import { useNow } from "@/lib/client/useNow";
 import { palette } from "@/lib/client/colors";
-import { ago, clock, distance, minutes } from "@/lib/client/format";
+import { ago, clock, clockWithDay, distance, minutes } from "@/lib/client/format";
 import type { HangoutDetail, LatLng, LiveShare } from "@/lib/types";
 import { MapView, avatarPinHtml, destPinHtml, type MapLine, type MapMarker } from "../MapView";
 import { PlaceCover } from "../PlaceCover";
@@ -266,7 +266,7 @@ export function LiveView({ h, mutate, trails }: { h: HangoutDetail; mutate: Muta
             <button className={`btn w-full ${travelling.length === 0 ? "btn-volt btn-lg" : "btn-outline"}`} onClick={() => setEndOpen(true)}>
               {travelling.length === 0 ? "🎉 Wrap up the hangout" : "End hangout"}
             </button>
-            <p className="mt-2 text-center text-xs text-muted">Location sharing switches off automatically at {clock(h.endsAt)}.</p>
+            <p className="mt-2 text-center text-xs text-muted">Location sharing switches off automatically at {clockWithDay(h.endsAt)}.</p>
           </div>
         </div>
       </div>
@@ -277,7 +277,9 @@ export function LiveView({ h, mutate, trails }: { h: HangoutDetail; mutate: Muta
             <Eye className="mt-0.5 h-5 w-5 shrink-0" />
             <div>
               <div className="font-bold">Who can see it</div>
-              <div className="text-muted">Only the {viewers.length} other {viewers.length === 1 ? "person" : "people"} in “{h.title}”.</div>
+              <div className="text-muted">
+                Only people in “{h.title}”: right now that&apos;s {viewers.length} other {viewers.length === 1 ? "person" : "people"}. Anyone who joins later with the plan&apos;s link will see it too.
+              </div>
               <div className="mt-2">
                 <AvatarStack users={viewers.map((v) => v.user)} size={26} max={8} />
               </div>
@@ -288,7 +290,7 @@ export function LiveView({ h, mutate, trails }: { h: HangoutDetail; mutate: Muta
             <div>
               <div className="font-bold">How long</div>
               <div className="text-muted">
-                Until you stop it, or {clock(h.endsAt)} at the latest. Your live coordinates are deleted when the hangout ends.
+                Until you stop it, or {clockWithDay(h.endsAt)} at the latest. Your live coordinates are deleted when the hangout ends.
               </div>
             </div>
           </div>
@@ -461,7 +463,7 @@ function MySharing({
                     ? "Location permission is blocked. Allow it in your browser settings."
                     : gps.status === "error"
                       ? "Can't get your location right now."
-                      : `Until ${clock(h.endsAt)}${gps.accuracy ? ` · ±${Math.round(gps.accuracy)} m` : ""}`}
+                      : `Until ${clockWithDay(h.endsAt)}${gps.accuracy ? ` · ±${Math.round(gps.accuracy)} m` : ""}`}
           </div>
         </div>
       </div>

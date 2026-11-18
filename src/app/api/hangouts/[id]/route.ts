@@ -15,7 +15,7 @@ export const PATCH = handle<Ctx>(async (req, { params }) => {
   const b = await readBody(req);
   await updateHangout(u.id, (await params).id, {
     title: b.title !== undefined ? str(b.title, "Title", { min: 1, max: 60 }) : undefined,
-    startsAt: b.startsAt !== undefined ? num(b.startsAt, "Start time") : undefined,
+    startsAt: b.startsAt !== undefined ? num(b.startsAt, "Start time", { min: Date.now() - 6 * 3600_000 }) : undefined,
     mode: b.mode !== undefined ? oneOf(b.mode, "Transport mode", MODES.map((m) => m.id)) : undefined,
   });
   return { ok: true };

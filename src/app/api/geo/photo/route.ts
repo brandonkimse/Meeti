@@ -1,9 +1,9 @@
-import { requireUser } from "@/server/auth";
+import { getActor } from "@/server/auth";
 import { config } from "@/server/config";
 
-/** Proxies Google Places photos so the API key stays on the server. */
+/** Proxies Google Places photos so the API key stays on the server. Only for people using Meeti (users or guests). */
 export async function GET(req: Request) {
-  await requireUser().catch(() => null);
+  if (!(await getActor().catch(() => null))) return new Response("Not found", { status: 404 });
   const name = new URL(req.url).searchParams.get("name") ?? "";
   if (!config.googleMapsKey || !/^places\/[\w-]+\/photos\/[\w-]+$/.test(name)) return new Response("Not found", { status: 404 });
   const res = await fetch(`https://places.googleapis.com/v1/${name}/media?maxWidthPx=800&key=${config.googleMapsKey}`, {

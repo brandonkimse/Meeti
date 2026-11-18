@@ -35,6 +35,11 @@ export function dayLabel(ts: number): string {
   return d.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" });
 }
 
+/** A time of day, with the day in front when it isn't today ("Tomorrow · 6:14 PM"). */
+export function clockWithDay(ts: number): string {
+  return dayLabel(ts) === "Today" ? clock(ts) : when(ts);
+}
+
 export function when(ts: number): string {
   return `${dayLabel(ts)} · ${clock(ts)}`;
 }

@@ -236,7 +236,7 @@ export async function recommend(
 
   const sources = new Set(items.flatMap((i) => i.travel.perMember.map((m) => `${m.mode}:${m.source}`)));
   if ([...sources].some((s) => s === "transit:model"))
-    notes.push("Transit times are estimates based on road distance. Add a Google Maps key for live schedules.");
+    notes.push("Transit times are estimates based on distance, not live schedules, so allow a little extra time.");
   if ([...sources].some((s) => s.endsWith(":model") && !s.startsWith("transit")))
     notes.push("Some times are rough estimates because the routing service didn't respond.");
 

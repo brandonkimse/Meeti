@@ -172,6 +172,7 @@ export function originKey(origins: Origin[]): string {
 }
 
 export async function getHangout(userId: string, id: string): Promise<HangoutDetail> {
+  sweepSoon();
   const { h, canManage } = await accessHangout(userId, id);
   const [g, parts, votes, suggestionRows, shareRows, archivedRow] = await Promise.all([
     h.group_id
@@ -523,9 +524,57 @@ async function completeInternal(id: string) {
       id,
     );
     await run("DELETE FROM demo_journeys WHERE hangout_id = ?", id);
+    // Starting points were only needed to pick the spot.
+    await run(
+      "UPDATE participants SET origin_lat = NULL, origin_lng = NULL, origin_label = NULL, origin_source = NULL WHERE hangout_id = ?",
+      id,
+    );
   });
   await changed(id, "hangout.completed");
   await groupChanged(h);
+}
+
+const SWEEP_EVERY_MS = 5 * 60_000;
+let lastSweep = 0;
+
+/**
+ * Deletes what the privacy policy says we don't keep, without needing a scheduler.
+ * Runs after the response, at most every few minutes per server instance.
+ */
+export function sweepSoon() {
+  const t = Date.now();
+  if (t - lastSweep < SWEEP_EVERY_MS) return;
+  lastSweep = t;
+  background(sweepExpired);
+}
+
+export async function sweepExpired() {
+  const t = now();
+  const day = 24 * 3600_000;
+  // Hangouts past their end are wrapped up even if nobody opens them (this wipes live coordinates).
+  const overdue = await q<{ id: string }>("SELECT id FROM hangouts WHERE status = 'live' AND ends_at < ? LIMIT 50", t);
+  for (const h of overdue) await completeInternal(h.id);
+  // Any live position whose sharing window has passed.
+  await run(
+    `UPDATE location_shares SET status = CASE WHEN status IN ('active','paused') THEN 'expired' ELSE status END,
+            lat = NULL, lng = NULL, accuracy = NULL, eta_s = NULL, distance_m = NULL
+      WHERE expires_at < ? AND (lat IS NOT NULL OR status IN ('active','paused'))`,
+    t,
+  );
+  // Starting points for plans that are over, or a day past their time without being locked in.
+  await run(
+    `UPDATE participants SET origin_lat = NULL, origin_lng = NULL, origin_label = NULL, origin_source = NULL
+      WHERE origin_lat IS NOT NULL
+        AND hangout_id IN (SELECT id FROM hangouts WHERE status IN ('completed','cancelled') OR ends_at < ?)`,
+    t - day,
+  );
+  // Guests who are no longer in any plan.
+  await run(
+    `DELETE FROM profiles p WHERE p.is_guest = 1 AND p.created_at < ?
+        AND NOT EXISTS (SELECT 1 FROM participants x WHERE x.user_id = p.id)
+        AND NOT EXISTS (SELECT 1 FROM hangouts h WHERE h.created_by = p.id)`,
+    t - day,
+  );
 }
 
 export async function complete(userId: string, id: string) {

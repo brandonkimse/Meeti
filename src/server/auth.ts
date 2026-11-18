@@ -126,6 +126,8 @@ export async function claimGuest(userId: string): Promise<void> {
         await run(`UPDATE ${table} SET user_id = ? WHERE user_id = ?`, userId, guestId);
       }
       await run("UPDATE suggestions SET added_by = ? WHERE added_by = ?", userId, guestId);
+      // A guest can end up hosting a plan when its host deletes their account.
+      await run("UPDATE hangouts SET created_by = ? WHERE created_by = ?", userId, guestId);
       await run("DELETE FROM profiles WHERE id = ?", guestId);
     });
   }

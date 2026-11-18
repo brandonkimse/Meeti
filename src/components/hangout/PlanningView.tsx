@@ -285,7 +285,7 @@ function StartTab({ h, mutate, onNext, onInvite }: { h: HangoutDetail; mutate: M
             )}
             <p className="flex gap-1.5 text-xs text-muted">
               <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-              Your starting point is visible to the {others} other {others === 1 ? "person" : "people"} in this hangout. If you&apos;d rather not share your exact spot, type a nearby landmark.
+              Your starting point is visible to everyone in this hangout (right now {others} other {others === 1 ? "person" : "people"}), including anyone who joins later with its link. If you&apos;d rather not share your exact spot, type a nearby landmark.
             </p>
           </div>
         )}
